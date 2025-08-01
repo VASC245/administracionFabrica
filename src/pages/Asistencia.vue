@@ -154,7 +154,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { supabase } from '@/lib/supabase'
 
 // Empleados y días
-const empleados = ['Jorge Luis', 'Chavo', 'Marco', 'Igor', 'Erick']
+const empleados = ['Igor','Gabriel','Jorge Luis','Alex','Chavo','Marco Meneses']
 const diasSemana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
 
 // Estado
