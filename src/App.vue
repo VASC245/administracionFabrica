@@ -1,6 +1,7 @@
 <template>
   <div>
     <Layout v-if="mostrarNavbar" />
+    <router-view v-if="esAuthPage" />
   </div>
 </template>
 
@@ -11,4 +12,5 @@ import { computed } from 'vue'
 
 const route = useRoute()
 const mostrarNavbar = computed(() => !['/login', '/register'].includes(route.path))
+const esAuthPage = computed(() => ['/login', '/register'].includes(route.path))
 </script>
