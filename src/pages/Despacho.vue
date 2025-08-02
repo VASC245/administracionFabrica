@@ -1,6 +1,6 @@
 <template>
   <div class="max-w-5xl mx-auto bg-white shadow-xl rounded-xl p-8 mt-10">
-    <h2 class="text-3xl font-bold text-gray-800 mb-6 text-center">Control de Despacho</h2>
+    <h2 class="text-3xl font-bold text-gray-800 mb-6 text-center">Control de Entrega de Producto</h2>
 
     <!-- Filtro por fechas -->
     <div class="flex flex-wrap items-center gap-4 mb-6">
@@ -70,7 +70,7 @@
       <div class="flex gap-4">
         <button @click="agregarViaje"
           class="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition w-full">
-          Agregar Viajes
+          {{ editando ? 'Actualizar Viaje' : 'Agregar Viajes' }}
         </button>
         <button @click="resetFormulario"
           class="bg-gray-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-gray-600 transition w-full">
@@ -80,7 +80,7 @@
     </div>
 
     <!-- Tabla de viajes -->
-    <div v-if="viajes.length > 0" class="mt-8">
+    <div v-if="viajes.length > 0" class="mt-8 overflow-x-auto">
       <h3 class="text-xl font-bold text-gray-700 mb-4">Detalle de Viajes</h3>
       <table class="min-w-full border border-gray-300 rounded-lg text-sm">
         <thead class="bg-gray-100 text-gray-700 uppercase text-xs">
@@ -93,7 +93,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(viaje, index) in viajes" :key="viaje.id" class="odd:bg-white even:bg-gray-50">
+          <tr v-for="(viaje, index) in viajes" :key="index" class="odd:bg-white even:bg-gray-50">
             <td class="px-4 py-2 border">{{ index + 1 }}</td>
             <td class="px-4 py-2 border">{{ viaje.tractor }} viajes</td>
             <td class="px-4 py-2 border">{{ viaje.coche }} viajes</td>
@@ -102,8 +102,7 @@
               <button @click="editarViaje(viaje)" class="bg-yellow-500 text-white px-3 py-1 rounded-lg hover:bg-yellow-600">
                 Editar
               </button>
-              <button @click="eliminarViaje(viaje.id)"
-                class="bg-red-500 text-white px-3 py-1 rounded-lg hover:bg-red-600">
+              <button @click="eliminarViaje(viaje)" class="bg-red-500 text-white px-3 py-1 rounded-lg hover:bg-red-600">
                 Eliminar
               </button>
             </td>
@@ -141,7 +140,8 @@ const viajeCoche = ref(0)
 const viajes = ref([])
 const mostrarModal = ref(false)
 const editando = ref(false)
-const idEditando = ref(null)
+const idEditandoTractor = ref(null)
+const idEditandoCoche = ref(null)
 
 const fechaInicio = ref('')
 const fechaFin = ref('')
@@ -150,52 +150,63 @@ const fundasPorTonelada = 66
 const tractorPorViaje = 30
 const cochePorViaje = 15
 
-const progreso = computed(() => metaFundas.value ? Math.min(((totalFundas.value / metaFundas.value) * 100).toFixed(0), 100) : 0)
+const progreso = computed(() =>
+  metaFundas.value ? Math.min(((totalFundas.value / metaFundas.value) * 100).toFixed(0), 100) : 0
+)
 const faltantes = computed(() => Math.max(metaFundas.value - totalFundas.value, 0))
 
 const actualizarMeta = () => {
   metaFundas.value = cargaSeleccionada.value * fundasPorTonelada
-  totalFundas.value = 0
-  viajes.value = []
+  totalFundas.value = viajes.value.reduce((a, v) => a + v.total, 0)
 }
 
 const agregarViaje = async () => {
-  const totalViaje = (viajeTractor.value * tractorPorViaje) + (viajeCoche.value * cochePorViaje)
-  if (totalViaje <= 0) {
+  const inserts = []
+
+  if (viajeTractor.value > 0) {
+    inserts.push({
+      tipo: 'tractor',
+      cantidad_viajes: viajeTractor.value,
+      fundas_calculadas: viajeTractor.value * tractorPorViaje
+    })
+  }
+
+  if (viajeCoche.value > 0) {
+    inserts.push({
+      tipo: 'coche',
+      cantidad_viajes: viajeCoche.value,
+      fundas_calculadas: viajeCoche.value * cochePorViaje
+    })
+  }
+
+  if (inserts.length === 0) {
     alert('Ingrese al menos un viaje.')
     return
   }
 
-  if (editando.value) {
-    await supabase.from('viajes_despacho').update({
-      cantidad_viajes: viajeTractor.value + viajeCoche.value,
-      fundas_calculadas: totalViaje
-    }).eq('id', idEditando.value)
-    editando.value = false
-    idEditando.value = null
-  } else {
-    await supabase.from('viajes_despacho').insert([{
-      tipo: viajeTractor.value > 0 ? 'tractor' : 'coche',
-      cantidad_viajes: viajeTractor.value + viajeCoche.value,
-      fundas_calculadas: totalViaje
-    }])
-  }
-
+  await supabase.from('viajes_despacho').insert(inserts)
   await cargarViajes()
+
   viajeTractor.value = 0
   viajeCoche.value = 0
+
+  if (totalFundas.value >= metaFundas.value && metaFundas.value > 0) {
+    mostrarModal.value = true
+  }
 }
 
 const editarViaje = (viaje) => {
   viajeTractor.value = viaje.tractor
   viajeCoche.value = viaje.coche
+  idEditandoTractor.value = viaje.idTractor
+  idEditandoCoche.value = viaje.idCoche
   editando.value = true
-  idEditando.value = viaje.id
 }
 
-const eliminarViaje = async (id) => {
+const eliminarViaje = async (viaje) => {
   if (confirm('¿Seguro que deseas eliminar este viaje?')) {
-    await supabase.from('viajes_despacho').delete().eq('id', id)
+    if (viaje.idTractor) await supabase.from('viajes_despacho').delete().eq('id', viaje.idTractor)
+    if (viaje.idCoche) await supabase.from('viajes_despacho').delete().eq('id', viaje.idCoche)
     await cargarViajes()
   }
 }
@@ -212,17 +223,33 @@ const resetFormulario = () => {
 const cerrarModal = () => mostrarModal.value = false
 
 const cargarViajes = async () => {
-  let query = supabase.from('viajes_despacho').select('*')
+  let query = supabase.from('viajes_despacho').select('*').order('id', { ascending: true })
+
   if (fechaInicio.value && fechaFin.value) {
     query = query.gte('created_at', fechaInicio.value).lte('created_at', fechaFin.value)
   }
-  const { data } = await query
-  viajes.value = data.map(v => ({
-    id: v.id,
-    tractor: v.tipo === 'tractor' ? v.cantidad_viajes : 0,
-    coche: v.tipo === 'coche' ? v.cantidad_viajes : 0,
-    total: v.fundas_calculadas
-  }))
+
+  const { data, error } = await query
+  if (error) {
+    console.error('Error cargando viajes:', error)
+    return
+  }
+
+  const agrupados = []
+  for (let i = 0; i < data.length; i += 2) {
+    const tractor = data[i]?.tipo === 'tractor' ? data[i] : data[i + 1]
+    const coche = data[i + 1]?.tipo === 'coche' ? data[i + 1] : data[i]
+
+    agrupados.push({
+      idTractor: tractor?.tipo === 'tractor' ? tractor.id : null,
+      idCoche: coche?.tipo === 'coche' ? coche.id : null,
+      tractor: tractor?.tipo === 'tractor' ? tractor.cantidad_viajes : 0,
+      coche: coche?.tipo === 'coche' ? coche.cantidad_viajes : 0,
+      total: (tractor?.fundas_calculadas || 0) + (coche?.fundas_calculadas || 0)
+    })
+  }
+
+  viajes.value = agrupados
   totalFundas.value = viajes.value.reduce((a, v) => a + v.total, 0)
 }
 
