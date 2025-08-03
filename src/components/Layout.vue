@@ -10,7 +10,7 @@
           <router-link to="/produccion" v-if="puedeAcceder('produccion')" class="hover:text-gray-300">Producción</router-link>
           <router-link to="/horno" v-if="puedeAcceder('horno')" class="hover:text-gray-300">Horno</router-link>
           <router-link to="/asistencia" v-if="puedeAcceder('asistencia')" class="hover:text-gray-300">Asistencia</router-link>
-          <router-link to="/despacho" v-if="puedeAcceder('despacho')" class="hover:text-gray-300">Despacho</router-link>
+          <router-link to="/despacho" v-if="puedeAcceder('despacho')" class="hover:text-gray-300">Entrega</router-link>
         </div>
 
         <div class="flex items-center gap-4">

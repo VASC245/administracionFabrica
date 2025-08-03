@@ -88,6 +88,7 @@ const mostrarModal = ref(false)
 const codigoPin = ref('')
 const errorPin = ref('')
 
+// ✅ Login con roles desde la tabla `users`
 const login = async () => {
   mensaje.value = ''
   const { data, error } = await supabase.auth.signInWithPassword({
@@ -101,12 +102,40 @@ const login = async () => {
     return
   }
 
+  const user = data.user
+
+  // ✅ Consultar el rol en la tabla "users"
+  const { data: perfil, error: perfilError } = await supabase
+    .from('users')
+    .select('rol, estado')
+    .eq('id', user.id)
+    .single()
+
+  if (perfilError || !perfil) {
+    mensaje.value = 'No se encontró el perfil del usuario'
+    mensajeColor.value = 'text-red-500'
+    return
+  }
+
+  if (!perfil.estado) {
+    mensaje.value = 'Usuario inactivo'
+    mensajeColor.value = 'text-red-500'
+    return
+  }
+
+  // ✅ Guardar rol y datos en localStorage
+  localStorage.setItem('role', perfil.rol)
+  localStorage.setItem('user', JSON.stringify(user))
+
   mensaje.value = 'Inicio de sesión exitoso'
   mensajeColor.value = 'text-green-600'
-  router.push('/dashboard')
+
+  setTimeout(() => {
+    router.push('/dashboard')
+  }, 600)
 }
 
-// ✅ Verificar PIN fijo
+// ✅ Verificar PIN fijo para registro
 const verificarPin = () => {
   if (codigoPin.value === 'FABRICA2025') {
     mostrarModal.value = false
@@ -116,7 +145,7 @@ const verificarPin = () => {
   }
 }
 
-// Cerrar modal
+// ✅ Cerrar modal
 const cerrarModal = () => {
   mostrarModal.value = false
   codigoPin.value = ''

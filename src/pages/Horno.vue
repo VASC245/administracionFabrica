@@ -53,7 +53,7 @@
       <!-- Pellet -->
       <div>
         <label class="block text-sm font-semibold text-gray-700 mb-2">Pellet</label>
-        <input v-model.number="nuevo.pellet" type="number" placeholder="Pellet"
+        <input v-model.number="nuevo.pellet" type="number" placeholder="Pellet (funda)"
           class="w-full border rounded-lg px-3 py-2" />
       </div>
 
