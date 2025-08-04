@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { supabase } from '@/lib/supabase'
 
 import Dashboard from '@/pages/Dashboard.vue'
+import Lena from '@/pages/Lena.vue'
 import Aserrin from '@/pages/Aserrin.vue'
 import Produccion from '@/pages/Produccion.vue'
 import Horno from '@/pages/Horno.vue'
@@ -20,6 +21,7 @@ const routes = [
   { path: '/horno', name: 'Horno', component: Horno },
   { path: '/asistencia', name: 'Asistencia', component: Asistencia },
   { path: '/despacho', name: 'Despacho', component: Despacho },
+  {path: '/lena', name:'Leña', component: Lena},
 
   { path: '/', redirect: '/login' }
 ]
@@ -49,7 +51,7 @@ router.beforeEach(async (to, from, next) => {
       return next('/horno')
     }
 
-    if (rol === 'Supervisor' && !['/horno', '/aserrin', '/produccion', '/asistencia', '/despacho'].includes(to.path)) {
+    if (rol === 'Supervisor' && !['/horno', '/aserrin', '/produccion', '/asistencia', '/despacho', '/leña'].includes(to.path)) {
       return next('/aserrin')
     }
 
