@@ -86,7 +86,6 @@ const registrar = async () => {
     {
       id: data.user.id,
       nombre: nombre.value,
-      email: email.value,
       rol: rol.value,
       estado: true
     }
