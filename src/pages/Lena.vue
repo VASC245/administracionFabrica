@@ -55,9 +55,19 @@
       </div>
     </form>
 
+    <!-- Botón Mostrar/Ocultar Historial -->
+    <div class="text-center mb-6">
+      <button
+        @click="mostrarTabla = !mostrarTabla"
+        class="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition"
+      >
+        {{ mostrarTabla ? 'Ocultar Registros' : 'Mostrar Registros' }}
+      </button>
+    </div>
+
     <!-- Lista Historial -->
-    <div>
-      <h3 class="text-xl font-semibold mb-4 text-gray-700">Historial</h3>
+    <div v-if="mostrarTabla">
+      <h3 class="text-xl font-semibold mb-4 text-gray-700">Registros guardados</h3>
       <div class="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
         <table class="min-w-full bg-white">
           <thead class="bg-gray-100">
@@ -100,7 +110,7 @@
 import { ref, onMounted } from 'vue'
 import { supabase } from '@/lib/supabase'
 
-// ✅ Función para obtener fecha actual en formato YYYY-MM-DD
+// ✅ Fecha actual por defecto
 const obtenerFechaHoy = () => {
   const hoy = new Date()
   return hoy.toISOString().split('T')[0]
@@ -109,12 +119,15 @@ const obtenerFechaHoy = () => {
 const form = ref({ fecha: obtenerFechaHoy(), proveedor: '', metros_cubicos: '' })
 const lenaList = ref([])
 const loading = ref(false)
+const mostrarTabla = ref(true) // ✅ Control de visibilidad
 
+// ✅ Cargar registros
 const cargarLena = async () => {
   const { data, error } = await supabase.from('lena').select('*').order('fecha', { ascending: false })
   if (!error) lenaList.value = data
 }
 
+// ✅ Guardar registro
 const guardarLena = async () => {
   loading.value = true
   const { error } = await supabase.from('lena').insert([form.value])
@@ -127,6 +140,7 @@ const guardarLena = async () => {
   loading.value = false
 }
 
+// ✅ Eliminar registro
 const eliminarLena = async (id) => {
   const { error } = await supabase.from('lena').delete().eq('id', id)
   if (!error) await cargarLena()

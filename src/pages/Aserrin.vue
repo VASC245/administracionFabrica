@@ -43,7 +43,8 @@
       <div>
         <label class="block text-sm font-semibold text-gray-700 mb-2">Número de Palas</label>
         <div class="flex items-center gap-4">
-          <input disabled
+          <input
+            disabled
             v-model.number="totalPalas"
             type="number"
             class="w-32 border rounded-lg px-3 py-2 text-center"
@@ -109,49 +110,61 @@
       </div>
     </div>
 
-    <!-- TABLA -->
-    <div v-if="registros.length > 0" class="mt-10">
-      <h3 class="text-xl font-bold text-gray-700 mb-4">Registros Guardados</h3>
-      <div class="overflow-x-auto">
-        <table class="min-w-full border border-gray-300 rounded-lg text-sm">
-          <thead class="bg-gray-100 text-gray-700 uppercase text-xs">
-            <tr>
-              <th class="px-4 py-3 border">Fecha</th>
-              <th class="px-4 py-3 border">Proveedor</th>
-              <th class="px-4 py-3 border">Humedad</th>
-              <th class="px-4 py-3 border">Palas</th>
-              <th class="px-4 py-3 border">Peso (kg)</th>
-              <th class="px-4 py-3 border text-center">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="registro in registros" :key="registro.id" class="odd:bg-white even:bg-gray-50">
-              <td class="px-4 py-2 border">{{ registro.fecha }}</td>
-              <td class="px-4 py-2 border">{{ registro.proveedor }}</td>
-              <td class="px-4 py-2 border">{{ registro.humedad || '-' }}</td>
-              <td class="px-4 py-2 border">{{ registro.palas }}</td>
-              <td class="px-4 py-2 border">{{ registro.peso_kg }}</td>
-              <td class="px-4 py-2 border text-center space-x-2">
-                <button
-                  @click="editarRegistro(registro)"
-                  class="bg-yellow-500 text-white px-3 py-1 rounded-lg hover:bg-yellow-600 transition"
-                >
-                  Editar
-                </button>
-                <button
-                  @click="eliminarRegistro(registro.id)"
-                  class="bg-red-500 text-white px-3 py-1 rounded-lg hover:bg-red-600 transition"
-                >
-                  Eliminar
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+    <!-- BOTÓN MOSTRAR/OCULTAR TABLA -->
+    <div class="text-center my-6">
+      <button
+        @click="mostrarTabla = !mostrarTabla"
+        class="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition"
+      >
+        {{ mostrarTabla ? 'Ocultar Registros' : 'Mostrar Registros' }}
+      </button>
     </div>
-    <div v-else class="text-gray-500 text-center mt-6">
-      No hay registros en este rango de fechas.
+
+    <!-- TABLA -->
+    <div v-if="mostrarTabla">
+      <div v-if="registros.length > 0" class="mt-10">
+        <h3 class="text-xl font-bold text-gray-700 mb-4">Registros Guardados</h3>
+        <div class="overflow-x-auto">
+          <table class="min-w-full border border-gray-300 rounded-lg text-sm">
+            <thead class="bg-gray-100 text-gray-700 uppercase text-xs">
+              <tr>
+                <th class="px-4 py-3 border">Fecha</th>
+                <th class="px-4 py-3 border">Proveedor</th>
+                <th class="px-4 py-3 border">Humedad</th>
+                <th class="px-4 py-3 border">Palas</th>
+                <th class="px-4 py-3 border">Peso (kg)</th>
+                <th class="px-4 py-3 border text-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="registro in registros" :key="registro.id" class="odd:bg-white even:bg-gray-50">
+                <td class="px-4 py-2 border">{{ registro.fecha }}</td>
+                <td class="px-4 py-2 border">{{ registro.proveedor }}</td>
+                <td class="px-4 py-2 border">{{ registro.humedad || '-' }}</td>
+                <td class="px-4 py-2 border">{{ registro.palas }}</td>
+                <td class="px-4 py-2 border">{{ registro.peso_kg }}</td>
+                <td class="px-4 py-2 border text-center space-x-2">
+                  <button
+                    @click="editarRegistro(registro)"
+                    class="bg-yellow-500 text-white px-3 py-1 rounded-lg hover:bg-yellow-600 transition"
+                  >
+                    Editar
+                  </button>
+                  <button
+                    @click="eliminarRegistro(registro.id)"
+                    class="bg-red-500 text-white px-3 py-1 rounded-lg hover:bg-red-600 transition"
+                  >
+                    Eliminar
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div v-else class="text-gray-500 text-center mt-6">
+        No hay registros en este rango de fechas.
+      </div>
     </div>
   </div>
 </template>
@@ -173,6 +186,9 @@ const idEditando = ref(null)
 
 const fechaInicio = ref('')
 const fechaFin = ref('')
+
+// ✅ Estado para mostrar/ocultar tabla
+const mostrarTabla = ref(true)
 
 // Calcular peso
 const calcularPeso = () => {

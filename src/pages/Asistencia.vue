@@ -98,53 +98,69 @@
       </div>
     </div>
 
+    <!-- BOTÓN MOSTRAR/OCULTAR TABLA -->
+    <div class="text-center mb-6">
+      <button
+        @click="mostrarTabla = !mostrarTabla"
+        class="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition"
+      >
+        {{ mostrarTabla ? 'Ocultar Registros' : 'Mostrar Registros' }}
+      </button>
+    </div>
+
     <!-- Tabla de registros -->
-    <div v-for="(asistencias, dia) in registrosPorDia" :key="dia" class="mb-6">
-      <div class="flex justify-between items-center mb-3">
-        <h4 class="text-lg font-bold text-gray-800">Registros para {{ dia }}</h4>
-        <div class="flex gap-2">
-          <button
-            @click="editarDia(dia)"
-            class="bg-yellow-500 text-white px-4 py-1 rounded-lg hover:bg-yellow-600 transition"
-          >
-            Editar
-          </button>
-          <button
-            @click="eliminarDia(dia)"
-            class="bg-red-500 text-white px-4 py-1 rounded-lg hover:bg-red-600 transition"
-          >
-            Eliminar
-          </button>
+    <div v-if="mostrarTabla">
+      <div
+        v-for="(asistencias, dia) in registrosPorDia"
+        :key="dia"
+        class="mb-6"
+      >
+        <div class="flex justify-between items-center mb-3">
+          <h4 class="text-lg font-bold text-gray-800">Registros para {{ dia }}</h4>
+          <div class="flex gap-2">
+            <button
+              @click="editarDia(dia)"
+              class="bg-yellow-500 text-white px-4 py-1 rounded-lg hover:bg-yellow-600 transition"
+            >
+              Editar
+            </button>
+            <button
+              @click="eliminarDia(dia)"
+              class="bg-red-500 text-white px-4 py-1 rounded-lg hover:bg-red-600 transition"
+            >
+              Eliminar
+            </button>
+          </div>
         </div>
+        <table class="min-w-full border border-gray-300 rounded-lg">
+          <thead class="bg-gray-100 text-gray-700 uppercase text-sm">
+            <tr>
+              <th class="px-4 py-3 border">Empleado</th>
+              <th class="px-4 py-3 border">Estado</th>
+              <th class="px-4 py-3 border">Hora</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="empleado in empleados"
+              :key="empleado"
+              class="odd:bg-white even:bg-gray-50"
+            >
+              <td class="px-4 py-2 border">{{ empleado }}</td>
+              <td class="px-4 py-2 border">
+                <span
+                  :class="asistencias.presentes.includes(empleado) ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'"
+                >
+                  {{ asistencias.presentes.includes(empleado) ? 'Presente' : 'Ausente' }}
+                </span>
+              </td>
+              <td class="px-4 py-2 border">
+                {{ asistencias.presentes.includes(empleado) ? asistencias.hora : '-' }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-      <table class="min-w-full border border-gray-300 rounded-lg">
-        <thead class="bg-gray-100 text-gray-700 uppercase text-sm">
-          <tr>
-            <th class="px-4 py-3 border">Empleado</th>
-            <th class="px-4 py-3 border">Estado</th>
-            <th class="px-4 py-3 border">Hora</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="empleado in empleados"
-            :key="empleado"
-            class="odd:bg-white even:bg-gray-50"
-          >
-            <td class="px-4 py-2 border">{{ empleado }}</td>
-            <td class="px-4 py-2 border">
-              <span
-                :class="asistencias.presentes.includes(empleado) ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'"
-              >
-                {{ asistencias.presentes.includes(empleado) ? 'Presente' : 'Ausente' }}
-              </span>
-            </td>
-            <td class="px-4 py-2 border">
-              {{ asistencias.presentes.includes(empleado) ? asistencias.hora : '-' }}
-            </td>
-          </tr>
-        </tbody>
-      </table>
     </div>
   </div>
 </template>
@@ -169,6 +185,7 @@ const diaEnEdicion = ref(null)
 // Filtro por fechas
 const fechaInicio = ref('')
 const fechaFin = ref('')
+const mostrarTabla = ref(true) // ✅ Nuevo estado para mostrar/ocultar tabla
 
 // Actualizar hora
 const actualizarHora = () => {

@@ -94,54 +94,64 @@
       </div>
     </form>
 
-    <!-- TABLA -->
-    <div v-if="registros.length > 0">
-      <h3 class="text-xl font-bold text-gray-700 mb-4">Registros Guardados</h3>
-      <div class="overflow-x-auto">
-        <table class="min-w-full border border-gray-300 rounded-lg text-sm">
-          <thead class="bg-gray-100 text-gray-700 uppercase text-xs">
-            <tr>
-              <th class="px-4 py-3 border">Fecha</th>
-              <th class="px-4 py-3 border">Hora</th>
-              <th class="px-4 py-3 border">Jampa</th>
-              <th class="px-4 py-3 border">Viruta</th>
-              <th class="px-4 py-3 border">Pellet</th>
-              <th class="px-4 py-3 border">T. Entrada</th>
-              <th class="px-4 py-3 border">T. Salida</th>
-              <th class="px-4 py-3 border">Humedad</th>
-              <th class="px-4 py-3 border">Amperios</th>
-              <th class="px-4 py-3 border text-center">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="registro in registros" :key="registro.id" class="odd:bg-white even:bg-gray-50">
-              <td class="px-4 py-2 border">{{ registro.fecha }}</td>
-              <td class="px-4 py-2 border">{{ registro.hora }}</td>
-              <td class="px-4 py-2 border">{{ registro.jampa }}</td>
-              <td class="px-4 py-2 border">{{ registro.viruta }}</td>
-              <td class="px-4 py-2 border">{{ registro.pellet }}</td>
-              <td class="px-4 py-2 border">{{ registro.temperatura_entrada }}°C</td>
-              <td class="px-4 py-2 border">{{ registro.temperatura_salida }}°C</td>
-              <td class="px-4 py-2 border">{{ registro.humedad }}%</td>
-              <td class="px-4 py-2 border">{{ registro.amperios }} A</td>
-              <td class="px-4 py-2 border text-center space-x-2">
-                <!-- BOTÓN EDITAR -->
-                <button @click="editarRegistro(registro)"
-                  class="bg-yellow-500 text-white px-3 py-1 rounded-lg hover:bg-yellow-600 transition">
-                  Editar
-                </button>
-                <!-- BOTÓN ELIMINAR -->
-                <button @click="eliminarRegistro(registro.id)"
-                  class="bg-red-500 text-white px-3 py-1 rounded-lg hover:bg-red-600 transition">
-                  Eliminar
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+    <!-- BOTÓN MOSTRAR/OCULTAR TABLA -->
+    <div class="text-center my-6">
+      <button
+        @click="mostrarTabla = !mostrarTabla"
+        class="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition"
+      >
+        {{ mostrarTabla ? 'Ocultar Registros' : 'Mostrar Registros' }}
+      </button>
     </div>
-    <div v-else class="text-gray-500 text-center mt-6">No hay registros en este rango de fechas.</div>
+
+    <!-- TABLA -->
+    <div v-if="mostrarTabla">
+      <div v-if="registros.length > 0">
+        <h3 class="text-xl font-bold text-gray-700 mb-4">Registros Guardados</h3>
+        <div class="overflow-x-auto">
+          <table class="min-w-full border border-gray-300 rounded-lg text-sm">
+            <thead class="bg-gray-100 text-gray-700 uppercase text-xs">
+              <tr>
+                <th class="px-4 py-3 border">Fecha</th>
+                <th class="px-4 py-3 border">Hora</th>
+                <th class="px-4 py-3 border">Jampa</th>
+                <th class="px-4 py-3 border">Viruta</th>
+                <th class="px-4 py-3 border">Pellet</th>
+                <th class="px-4 py-3 border">T. Entrada</th>
+                <th class="px-4 py-3 border">T. Salida</th>
+                <th class="px-4 py-3 border">Humedad</th>
+                <th class="px-4 py-3 border">Amperios</th>
+                <th class="px-4 py-3 border text-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="registro in registros" :key="registro.id" class="odd:bg-white even:bg-gray-50">
+                <td class="px-4 py-2 border">{{ registro.fecha }}</td>
+                <td class="px-4 py-2 border">{{ registro.hora }}</td>
+                <td class="px-4 py-2 border">{{ registro.jampa }}</td>
+                <td class="px-4 py-2 border">{{ registro.viruta }}</td>
+                <td class="px-4 py-2 border">{{ registro.pellet }}</td>
+                <td class="px-4 py-2 border">{{ registro.temperatura_entrada }}°C</td>
+                <td class="px-4 py-2 border">{{ registro.temperatura_salida }}°C</td>
+                <td class="px-4 py-2 border">{{ registro.humedad }}%</td>
+                <td class="px-4 py-2 border">{{ registro.amperios }} A</td>
+                <td class="px-4 py-2 border text-center space-x-2">
+                  <button @click="editarRegistro(registro)"
+                    class="bg-yellow-500 text-white px-3 py-1 rounded-lg hover:bg-yellow-600 transition">
+                    Editar
+                  </button>
+                  <button @click="eliminarRegistro(registro.id)"
+                    class="bg-red-500 text-white px-3 py-1 rounded-lg hover:bg-red-600 transition">
+                    Eliminar
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div v-else class="text-gray-500 text-center mt-6">No hay registros en este rango de fechas.</div>
+    </div>
   </div>
 </template>
 
@@ -153,6 +163,9 @@ const registros = ref([])
 const nuevo = ref(getDefaultRegistro())
 const editMode = ref(false)
 const idEditando = ref(null)
+
+// ✅ Mostrar/ocultar tabla
+const mostrarTabla = ref(true)
 
 // Filtro
 const fechaInicio = ref('')
