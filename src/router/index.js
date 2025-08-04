@@ -47,7 +47,7 @@ router.beforeEach(async (to, from, next) => {
     const { data: user } = await supabase.from('users').select('rol').eq('id', session.user.id).single()
     const rol = user?.rol
 
-    if (rol === 'Operador' && !['/horno', '/aserrin'].includes(to.path)) {
+    if (rol === 'Operador' && !['/horno', '/aserrin','/produccion'].includes(to.path)) {
       return next('/horno')
     }
 
