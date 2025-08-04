@@ -87,7 +87,7 @@ const puedeAcceder = (pagina) => {
   const rol = props.user?.rol
   if (rol === 'admin' || rol === 'Super Admin') return true
   if (rol === 'supervisor' || rol === 'Supervisor') return ['aserrin', 'produccion', 'horno', 'asistencia', 'despacho', 'lena'].includes(pagina)
-  if (rol === 'opera' || rol === 'Operador') return ['horno', 'aserrin'].includes(pagina)
+  if (rol === 'opera' || rol === 'Operador') return ['horno', 'aserrin','produccion'].includes(pagina)
   return false
 }
 </script>
