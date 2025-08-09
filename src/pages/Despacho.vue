@@ -97,7 +97,7 @@
       <!-- Reiniciar -->
       <div>
         <button
-          @click="resetFormulario"
+          @click="resetFormulario(true)"
           class="bg-gray-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-gray-600 transition w-full mt-4"
         >
           Reiniciar
@@ -154,8 +154,17 @@
 import { ref, computed, onMounted } from 'vue'
 import { supabase } from '@/lib/supabase'
 
-// Estado
-const fechaRegistro = ref(new Date().toISOString().split('T')[0])
+/* ===== Helpers ===== */
+const getTodayLocalISO = () => {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+/* ===== Estado ===== */
+const fechaRegistro = ref(getTodayLocalISO())   // <-- fecha exacta local por defecto
 const cargaSeleccionada = ref('')
 const metaFundas = ref(0)
 const totalFundas = ref(0)
@@ -169,16 +178,20 @@ const tractorPorViaje = 30
 const cochePorViaje = 15
 
 const progreso = computed(() =>
-  metaFundas.value ? Math.min(((totalFundas.value / metaFundas.value) * 100).toFixed(0), 100) : 0
+  metaFundas.value ? Math.min(Math.round((totalFundas.value / metaFundas.value) * 100), 100) : 0
 )
 const faltantes = computed(() => Math.max(metaFundas.value - totalFundas.value, 0))
 
-// ✅ Iniciar nuevo despacho
+/* ===== Iniciar nuevo despacho ===== */
 const iniciarNuevoDespacho = async () => {
+  if (!cargaSeleccionada.value) return
   const toneladas = Number(cargaSeleccionada.value)
   const kilos = toneladas * 1000
   metaFundas.value = Math.floor(kilos / kgPorFunda)
   totalFundas.value = 0
+
+  // asegura fecha local si la dejaron vacía
+  if (!fechaRegistro.value) fechaRegistro.value = getTodayLocalISO()
 
   const { error } = await supabase.from('despachos').insert([{
     fecha: fechaRegistro.value,
@@ -196,18 +209,58 @@ const iniciarNuevoDespacho = async () => {
   await cargarDespachos()
 }
 
-// ✅ Agregar viaje
-const agregarViaje = async (tipo) => {
-  let cantidad = tipo === 'tractor' ? viajeTractor.value * tractorPorViaje : viajeCoche.value * cochePorViaje
+/* ===== Cerrar/Finalizar despacho (al llegar a meta) ===== */
+const finalizarDespacho = async () => {
+  // Toma el último despacho (el más reciente)
+  const ultimoDespacho = despachos.value[0]
+  if (!ultimoDespacho) return
 
+  // Aseguramos que quede guardado en DB el total alcanzado (cap a meta)
+  const totalFinal = Math.min(totalFundas.value, metaFundas.value)
+  const { error } = await supabase
+    .from('despachos')
+    .update({ fundas_actual: totalFinal })
+    .eq('id', ultimoDespacho.id)
+
+  if (error) {
+    console.error("Error al cerrar despacho:", error)
+    alert("Error al cerrar despacho: " + error.message)
+    return
+  }
+
+  // Mostrar modal de confirmación
+  mostrarModal.value = true
+
+  // Reiniciar UI para volver a "Seleccionar Carga"
+  // (dejamos fecha del día; si quieres también reiniciarla, descomenta la línea)
+  resetFormulario(true)
+  cargaSeleccionada.value = ''
+  metaFundas.value = 0
+  totalFundas.value = 0
+
+  await cargarDespachos()
+}
+
+/* ===== Agregar viaje ===== */
+const agregarViaje = async (tipo) => {
+  // cantidad a agregar
+  let cantidad = tipo === 'tractor' ? (viajeTractor.value || 0) * tractorPorViaje
+                                    : (viajeCoche.value || 0) * cochePorViaje
+  if (cantidad < 0) cantidad = 0
+
+  // cap a lo faltante
   if (cantidad > faltantes.value) cantidad = faltantes.value
+
   totalFundas.value += cantidad
 
+  // Actualiza el último despacho en DB
   const ultimoDespacho = despachos.value[0]
   if (ultimoDespacho) {
-    const { error } = await supabase.from('despachos').update({
-      fundas_actual: totalFundas.value
-    }).eq('id', ultimoDespacho.id)
+    const nuevoTotal = Math.min(totalFundas.value, metaFundas.value)
+    const { error } = await supabase
+      .from('despachos')
+      .update({ fundas_actual: nuevoTotal })
+      .eq('id', ultimoDespacho.id)
 
     if (error) {
       console.error("Error actualizando despacho:", error)
@@ -215,29 +268,41 @@ const agregarViaje = async (tipo) => {
     }
   }
 
-  if (totalFundas.value >= metaFundas.value) mostrarModal.value = true
+  // ¿Llegamos a la meta? Cierra y reinicia automáticamente
+  if (totalFundas.value >= metaFundas.value) {
+    await finalizarDespacho()
+  }
+
+  // reset inputs de viajes
   viajeTractor.value = 1
   viajeCoche.value = 1
 }
 
-// ✅ Cargar historial y actualizar estado actual
+/* ===== Cargar historial ===== */
 const cargarDespachos = async () => {
-  const { data, error } = await supabase.from('despachos').select('*').order('id', { ascending: false })
-  if (!error && data.length > 0) {
-    despachos.value = data
-    // Actualizar estado con el despacho más reciente
-    metaFundas.value = data[0].fundas_meta
-    totalFundas.value = data[0].fundas_actual
+  const { data, error } = await supabase
+    .from('despachos')
+    .select('*')
+    .order('id', { ascending: false })
+  if (!error) {
+    despachos.value = data || []
+    // Si hay un despacho abierto, recupera su estado
+    if (despachos.value[0]) {
+      metaFundas.value = despachos.value[0].fundas_meta
+      totalFundas.value = despachos.value[0].fundas_actual
+    }
   }
 }
 
-// ✅ Eliminar
+/* ===== Eliminar ===== */
 const eliminarDespacho = async (id) => {
   const { error } = await supabase.from('despachos').delete().eq('id', id)
   if (!error) await cargarDespachos()
 }
 
-const resetFormulario = () => {
+/* ===== Reset UI ===== */
+const resetFormulario = (mantenerFecha = false) => {
+  if (!mantenerFecha) fechaRegistro.value = getTodayLocalISO()
   cargaSeleccionada.value = ''
   metaFundas.value = 0
   totalFundas.value = 0
@@ -245,7 +310,13 @@ const resetFormulario = () => {
   viajeCoche.value = 1
 }
 
-const cerrarModal = () => mostrarModal.value = false
+/* ===== Modal ===== */
+const cerrarModal = () => { mostrarModal.value = false }
 
-onMounted(cargarDespachos)
+/* ===== Init ===== */
+onMounted(async () => {
+  // Fecha exacta del día al cargar
+  fechaRegistro.value = getTodayLocalISO()
+  await cargarDespachos()
+})
 </script>
