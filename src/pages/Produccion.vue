@@ -102,14 +102,12 @@
                 <td class="px-4 py-2 border">{{ registro.fecha }}</td>
                 <td class="px-4 py-2 border">{{ registro.fundas }} (15kg)</td>
                 <td class="px-4 py-2 border text-center space-x-2">
-                  <!-- BOTÓN EDITAR -->
                   <button
                     @click="editarRegistro(registro)"
                     class="bg-yellow-500 text-white px-3 py-1 rounded-lg hover:bg-yellow-600 transition"
                   >
                     Editar
                   </button>
-                  <!-- BOTÓN ELIMINAR -->
                   <button
                     @click="eliminarRegistro(registro.id)"
                     class="bg-red-500 text-white px-3 py-1 rounded-lg hover:bg-red-600 transition"
@@ -145,6 +143,15 @@ const mostrarTabla = ref(true)
 const fechaInicio = ref('')
 const fechaFin = ref('')
 
+// === Helper: fecha exacta local (YYYY-MM-DD) ===
+const getTodayLocalISO = () => {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 // Cargar todos los registros
 const cargar = async () => {
   const { data, error } = await supabase
@@ -160,6 +167,10 @@ const filtrarPorFechas = async () => {
 
   if (fechaInicio.value && fechaFin.value) {
     query = query.gte('fecha', fechaInicio.value).lte('fecha', fechaFin.value)
+  } else if (fechaInicio.value) {
+    query = query.gte('fecha', fechaInicio.value)
+  } else if (fechaFin.value) {
+    query = query.lte('fecha', fechaFin.value)
   }
 
   const { data, error } = await query
@@ -175,6 +186,11 @@ const resetFiltro = () => {
 
 // Guardar o actualizar
 const guardar = async () => {
+  // Asegurar que siempre se guarde la fecha exacta de hoy si está vacío
+  if (!nuevo.value.fecha) {
+    nuevo.value.fecha = getTodayLocalISO()
+  }
+
   if (editMode.value) {
     const { error } = await supabase
       .from('produccion_fundas')
@@ -183,14 +199,17 @@ const guardar = async () => {
     if (!error) {
       editMode.value = false
       idEditando.value = null
-      nuevo.value = { fecha: '', fundas: null }
-      await cargar()
+      nuevo.value = { fecha: getTodayLocalISO(), fundas: null }
+      await filtrarPorFechas()
     }
   } else {
-    const { error } = await supabase.from('produccion_fundas').insert([nuevo.value])
+    const { error } = await supabase.from('produccion_fundas').insert([{
+      fecha: nuevo.value.fecha,
+      fundas: nuevo.value.fundas
+    }])
     if (!error) {
-      nuevo.value = { fecha: '', fundas: null }
-      await cargar()
+      nuevo.value = { fecha: getTodayLocalISO(), fundas: null }
+      await filtrarPorFechas()
     }
   }
 }
@@ -199,14 +218,23 @@ const guardar = async () => {
 const editarRegistro = (registro) => {
   editMode.value = true
   idEditando.value = registro.id
+  // Mantén la fecha tal cual viene del registro
   nuevo.value = { fecha: registro.fecha, fundas: registro.fundas }
+  window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 // Eliminar registro
 const eliminarRegistro = async (id) => {
   const { error } = await supabase.from('produccion_fundas').delete().eq('id', id)
-  if (!error) await cargar()
+  if (!error) await filtrarPorFechas()
 }
 
-onMounted(cargar)
+onMounted(async () => {
+  // Setear HOY por defecto en formulario y filtros
+  const hoy = getTodayLocalISO()
+  nuevo.value.fecha = hoy
+  fechaInicio.value = hoy
+  fechaFin.value = hoy
+  await filtrarPorFechas()
+})
 </script>

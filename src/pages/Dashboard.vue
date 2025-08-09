@@ -61,7 +61,7 @@
 
     <!-- GRÁFICO DEL HORNO -->
     <div class="bg-white rounded-lg shadow p-6 mt-8">
-      <h2 class="text-xl font-semibold mb-4">Gráfico Operación del Horno</h2>
+      <h2 class="text-xl font-semibold mb-4">Gráfico Operación del Horno (hoy)</h2>
       <apexchart
         width="100%"
         height="450"
@@ -117,8 +117,21 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, onMounted, shallowRef } from "vue";
 import { supabase } from "@/lib/supabase";
+
+/* ===== Helpers de fecha/hora local (evitan UTC) ===== */
+function getLocalDate() {
+  const now = new Date();
+  const tzoffset = now.getTimezoneOffset() * 60000;
+  return new Date(now.getTime() - tzoffset).toISOString().slice(0, 10); // yyyy-mm-dd local
+}
+function getLocalTime() {
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, "0");
+  const mm = String(now.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
 
 const fechaInicio = ref("");
 const fechaFin = ref("");
@@ -127,8 +140,9 @@ const totalDespachos = ref(0);
 const totalAserrin = ref(0);
 const stockActual = ref(0);
 
-const comparativoSeries = ref([]);
-const chartComparativoOptions = {
+/* Usamos shallowRef para evitar problemas de reactive deep en Apex */
+const comparativoSeries = shallowRef([]);
+const chartComparativoOptions = shallowRef({
   chart: { toolbar: { show: true }, zoom: { enabled: true } },
   xaxis: { categories: [], title: { text: "Fechas" }, labels: { rotate: -45 } },
   stroke: { curve: "smooth" },
@@ -136,10 +150,10 @@ const chartComparativoOptions = {
   dataLabels: { enabled: false },
   tooltip: { shared: true, intersect: false },
   legend: { position: "top" },
-};
+});
 
-const aserrinSeries = ref([]);
-const chartAserrinOptions = {
+const aserrinSeries = shallowRef([]);
+const chartAserrinOptions = shallowRef({
   chart: {
     toolbar: {
       show: true,
@@ -151,21 +165,21 @@ const chartAserrinOptions = {
   stroke: { curve: "smooth" },
   colors: ["#6366f1"],
   tooltip: {
-    custom: function({ series, seriesIndex, dataPointIndex, w }) {
-      const proveedor = w.config.series[seriesIndex].meta[dataPointIndex];
-      const palas = series[seriesIndex][dataPointIndex];
+    custom: function ({ series, seriesIndex, dataPointIndex, w }) {
+      const proveedor = (w?.config?.series?.[seriesIndex]?.meta?.[dataPointIndex]) || "—";
+      const palas = series?.[seriesIndex]?.[dataPointIndex] ?? 0;
       return `<div class="p-2"><b>${palas} palas</b><br>Proveedor: ${proveedor}</div>`;
     },
   },
-};
+});
 
-const hornoSeries = ref([]);
-const chartHornoOptions = {
+const hornoSeries = shallowRef([]);
+const chartHornoOptions = shallowRef({
   chart: { toolbar: { show: true }, zoom: { enabled: true } },
   stroke: { curve: "smooth" },
   colors: ["#ef4444", "#3b82f6", "#10b981", "#f59e0b"],
   xaxis: { categories: [], title: { text: "Hora" } },
-};
+});
 
 // Promedios del horno (solo hoy)
 const promedioEntrada = ref(0);
@@ -176,72 +190,99 @@ const promedioJampa = ref(0);
 const promedioViruta = ref(0);
 const promedioPellet = ref(0);
 
+function safeAvg(arr) {
+  if (!arr || arr.length === 0) return 0;
+  const num = arr.reduce((a, n) => a + (Number(n) || 0), 0);
+  return +(num / arr.length).toFixed(1);
+}
+
 const cargarDatos = async () => {
+  // Queries base
   let qProd = supabase.from("produccion_fundas").select("*");
   let qDesp = supabase.from("despachos").select("*");
   let qAser = supabase.from("aserrin").select("*");
 
+  // Filtro por fechas (local YYYY-MM-DD)
   if (fechaInicio.value && fechaFin.value) {
     qProd = qProd.gte("fecha", fechaInicio.value).lte("fecha", fechaFin.value);
     qDesp = qDesp.gte("fecha", fechaInicio.value).lte("fecha", fechaFin.value);
     qAser = qAser.gte("fecha", fechaInicio.value).lte("fecha", fechaFin.value);
   }
 
-  const [{ data: produccion }, { data: despachos }, { data: aserrin }] = await Promise.all([
+  const [{ data: produccion = [] }, { data: despachos = [] }, { data: aserrin = [] }] = await Promise.all([
     qProd,
     qDesp,
     qAser,
   ]);
 
-  totalProduccion.value = produccion.reduce((a, p) => a + p.fundas, 0);
-  totalDespachos.value = despachos.reduce((a, d) => a + d.fundas_actual, 0);
+  // Resúmenes
+  totalProduccion.value = produccion.reduce((a, p) => a + (p.fundas || 0), 0);
+  totalDespachos.value = despachos.reduce((a, d) => a + (d.fundas_actual || 0), 0);
   stockActual.value = totalProduccion.value - totalDespachos.value;
-  totalAserrin.value = aserrin.reduce((a, r) => a + r.palas, 0);
+  totalAserrin.value = aserrin.reduce((a, r) => a + (r.palas || 0), 0);
 
-  // Gráfico comparativo (Producción vs Despachos vs Stock)
+  // ---------- Gráfico comparativo (Producción vs Despachos vs Stock) ----------
   const fechas = [...new Set([...produccion.map(p => p.fecha), ...despachos.map(d => d.fecha)])].sort();
-  const prodPorFecha = fechas.map(f => produccion.filter(p => p.fecha === f).reduce((a, p) => a + p.fundas, 0));
-  const despPorFecha = fechas.map(f => despachos.filter(d => d.fecha === f).reduce((a, d) => a + d.fundas_actual, 0));
+  const prodPorFecha = fechas.map(f => produccion.filter(p => p.fecha === f).reduce((a, p) => a + (p.fundas || 0), 0));
+  const despPorFecha = fechas.map(f => despachos.filter(d => d.fecha === f).reduce((a, d) => a + (d.fundas_actual || 0), 0));
+
   let stockAcumulado = 0;
   const stockPorFecha = fechas.map((_, i) => {
-    stockAcumulado += prodPorFecha[i] - despPorFecha[i];
+    stockAcumulado += (prodPorFecha[i] || 0) - (despPorFecha[i] || 0);
     return stockAcumulado;
   });
 
-  chartComparativoOptions.xaxis.categories = fechas;
+  chartComparativoOptions.value = {
+    ...chartComparativoOptions.value,
+    xaxis: { ...chartComparativoOptions.value.xaxis, categories: fechas },
+  };
   comparativoSeries.value = [
     { name: "Producción", data: prodPorFecha },
     { name: "Entregadas", data: despPorFecha },
     { name: "Stock Acumulado", data: stockPorFecha },
   ];
 
-  // Gráfico Aserrín con proveedores
+  // ---------- Gráfico Aserrín (palas por fecha + proveedores en tooltip) ----------
   const fechasAserrin = [...new Set(aserrin.map(a => a.fecha))].sort();
-  const palasPorFecha = fechasAserrin.map(f => aserrin.filter(a => a.fecha === f).reduce((a, r) => a + r.palas, 0));
-  const proveedores = fechasAserrin.map(f => aserrin.filter(a => a.fecha === f).map(r => r.proveedor).join(", "));
-  chartAserrinOptions.xaxis.categories = fechasAserrin;
+  const palasPorFecha = fechasAserrin.map(f => aserrin.filter(a => a.fecha === f).reduce((a, r) => a + (r.palas || 0), 0));
+  const proveedores = fechasAserrin.map(f => aserrin.filter(a => a.fecha === f).map(r => r.proveedor).join(", ") || "—");
+
+  chartAserrinOptions.value = {
+    ...chartAserrinOptions.value,
+    xaxis: { ...chartAserrinOptions.value.xaxis, categories: fechasAserrin },
+  };
   aserrinSeries.value = [{ name: "Palas", data: palasPorFecha, meta: proveedores }];
 
-  // ✅ Gráfico Horno (solo día actual)
-  const hoy = new Date().toISOString().split("T")[0];
-  const { data: hornoHoy } = await supabase.from("horno").select("*").eq("fecha", hoy);
+  // ---------- Gráfico del horno (solo HOY local) ----------
+  const hoyLocal = getLocalDate();
+  const { data: hornoHoy = [] } = await supabase.from("horno").select("*").eq("fecha", hoyLocal).order("hora", { ascending: true });
 
+  const horas = hornoHoy.map(h => h.hora || "—");
+  const serieEntrada = hornoHoy.map(h => h.temperatura_entrada ?? null);
+  const serieSalida  = hornoHoy.map(h => h.temperatura_salida ?? null);
+  const serieHum     = hornoHoy.map(h => h.humedad ?? null);
+  const serieAmp     = hornoHoy.map(h => h.amperios ?? null);
+
+  // Asegura longitudes alineadas
+  chartHornoOptions.value = {
+    ...chartHornoOptions.value,
+    xaxis: { ...chartHornoOptions.value.xaxis, categories: horas },
+  };
   hornoSeries.value = [
-    { name: "Temp Entrada", data: hornoHoy.map(h => h.temperatura_entrada) },
-    { name: "Temp Salida", data: hornoHoy.map(h => h.temperatura_salida) },
-    { name: "Humedad", data: hornoHoy.map(h => h.humedad) },
-    { name: "Amperios", data: hornoHoy.map(h => h.amperios) },
+    { name: "Temp Entrada", data: serieEntrada },
+    { name: "Temp Salida",  data: serieSalida  },
+    { name: "Humedad",      data: serieHum     },
+    { name: "Amperios",     data: serieAmp     },
   ];
-  chartHornoOptions.xaxis.categories = hornoHoy.map(h => h.hora || "Sin hora");
 
-  // ✅ Promedios solo de hoy
-  promedioJampa.value = (hornoHoy.reduce((a, h) => a + (h.jampa || 0), 0) / (hornoHoy.length || 1)).toFixed(1);
-  promedioViruta.value = (hornoHoy.reduce((a, h) => a + (h.viruta || 0), 0) / (hornoHoy.length || 1)).toFixed(1);
-  promedioPellet.value = (hornoHoy.reduce((a, h) => a + (h.pellet || 0), 0) / (hornoHoy.length || 1)).toFixed(1);
-  promedioEntrada.value = (hornoHoy.reduce((a, h) => a + (h.temperatura_entrada || 0), 0) / (hornoHoy.length || 1)).toFixed(1);
-  promedioSalida.value = (hornoHoy.reduce((a, h) => a + (h.temperatura_salida || 0), 0) / (hornoHoy.length || 1)).toFixed(1);
-  promedioHumedad.value = (hornoHoy.reduce((a, h) => a + (h.humedad || 0), 0) / (hornoHoy.length || 1)).toFixed(1);
-  promedioAmperios.value = (hornoHoy.reduce((a, h) => a + (h.amperios || 0), 0) / (hornoHoy.length || 1)).toFixed(1);
+  // Promedios (solo hoy)
+  promedioJampa.value    = safeAvg(hornoHoy.map(h => h.jampa));
+  promedioViruta.value   = safeAvg(hornoHoy.map(h => h.viruta));
+  promedioPellet.value   = safeAvg(hornoHoy.map(h => h.pellet));
+  promedioEntrada.value  = safeAvg(hornoHoy.map(h => h.temperatura_entrada));
+  promedioSalida.value   = safeAvg(hornoHoy.map(h => h.temperatura_salida));
+  promedioHumedad.value  = safeAvg(hornoHoy.map(h => h.humedad));
+  promedioAmperios.value = safeAvg(hornoHoy.map(h => h.amperios));
 };
 
 onMounted(cargarDatos);
