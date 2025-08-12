@@ -1,93 +1,146 @@
 <template>
-  <nav class="bg-gray-800 text-white shadow-md">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="flex justify-between h-16 items-center">
-        <!-- Logo / Título -->
-        <h1 class="text-xl font-bold">Administración Fábrica</h1>
+  <div class="min-h-screen flex bg-gray-100">
+    <!-- Sidebar -->
+    <aside class="w-72 bg-white border-r hidden md:flex flex-col">
+      <div class="px-5 py-4 border-b">
+        <h1 class="text-xl font-bold">Fuego Verde</h1>
+        <p class="text-xs text-gray-500">Panel Administrativo</p>
+        <!-- Nombre y Rol -->
+        <p v-if="isLoaded" class="mt-2 text-sm text-gray-700 font-medium">
+          👤 {{ username }} - {{ roleLabel }}
+        </p>
+      </div>
 
-        <!-- Botón menú (mobile) -->
-        <button @click="menuAbierto = !menuAbierto" class="md:hidden focus:outline-none">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
-            stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
+      <nav class="flex-1 overflow-y-auto px-2 py-3 space-y-1">
+        <!-- Dashboard solo Super Admin -->
+        <RouterLink
+          v-if="isLoaded && role === 'superadmin'"
+          to="/"
+          class="block px-3 py-2 rounded-lg hover:bg-gray-50"
+          :class="{'bg-gray-100 font-medium': $route.name === 'dashboard'}">
+          Dashboard
+        </RouterLink>
+
+        <nav-dropdown
+          v-if="visibleItems(menu.operaciones).length"
+          label="Operaciones" icon="🏭"
+          :items="visibleItems(menu.operaciones)"
+        />
+        <nav-dropdown
+          v-if="visibleItems(menu.talento).length"
+          label="Talento Humano" icon="👥"
+          :items="visibleItems(menu.talento)"
+        />
+        <nav-dropdown
+          v-if="visibleItems(menu.comercial).length"
+          label="Comercial" icon="🛒"
+          :items="visibleItems(menu.comercial)"
+        />
+        <nav-dropdown
+          v-if="visibleItems(menu.admin).length"
+          label="Administración" icon="🛠️"
+          :items="visibleItems(menu.admin)"
+        />
+      </nav>
+
+      <div class="px-4 py-3 border-t flex items-center justify-between">
+        <div class="text-xs text-gray-500">© {{ year }} Fuego Verde</div>
+        <button
+          @click="logout"
+          class="text-xs bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700">
+          Cerrar sesión
         </button>
+      </div>
+    </aside>
 
-        <!-- Menú Desktop -->
-        <div class="hidden md:flex items-center space-x-6" v-if="user">
-          <router-link to="/dashboard" v-if="puedeAcceder('dashboard')" class="hover:text-gray-300">Dashboard</router-link>
-          <router-link to="/aserrin" v-if="puedeAcceder('aserrin')" class="hover:text-gray-300">Aserrín</router-link>
-          <router-link to="/produccion" v-if="puedeAcceder('produccion')" class="hover:text-gray-300">Producción</router-link>
-          <router-link to="/horno" v-if="puedeAcceder('horno')" class="hover:text-gray-300">Horno</router-link>
-          <router-link to="/asistencia" v-if="puedeAcceder('asistencia')" class="hover:text-gray-300">Asistencia</router-link>
-          <router-link to="/despacho" v-if="puedeAcceder('despacho')" class="hover:text-gray-300">Entrega</router-link>
-          <router-link to="/lena" v-if="puedeAcceder('lena')" class="hover:text-gray-300">Leña</router-link>
-        </div>
-
-        <!-- Usuario y Logout (Desktop) -->
-        <div class="hidden md:flex items-center gap-4">
-          <div v-if="user" class="text-right">
-            <p class="text-sm font-semibold">{{ user.nombre }}</p>
-            <p class="text-xs text-gray-300">{{ user.rol }}</p>
+    <!-- Main -->
+    <div class="flex-1 flex flex-col">
+      <header class="md:hidden sticky top-0 bg-white border-b p-3">
+        <div class="flex items-center justify-between w-full">
+          <div class="flex flex-col">
+            <div class="font-semibold">Fuego Verde</div>
+            <div class="text-xs text-gray-500">
+              👤 {{ username }} - {{ roleLabel }}
+            </div>
           </div>
-          <button @click="logout"
-            class="bg-red-500 px-4 py-2 rounded hover:bg-red-600 text-sm font-semibold">
-            Cerrar sesión
+          <div class="text-sm">{{ currentTitle }}</div>
+          <button
+            @click="logout"
+            class="text-xs bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700">
+            Salir
           </button>
         </div>
-      </div>
+      </header>
+
+      <main class="p-4 md:p-6">
+        <RouterView />
+      </main>
     </div>
-
-    <!-- Menú Mobile -->
-    <div v-show="menuAbierto" class="md:hidden bg-gray-700 px-4 pt-4 pb-6 space-y-2">
-      <div v-if="user" class="mb-4">
-        <p class="text-sm font-semibold">{{ user.nombre }}</p>
-        <p class="text-xs text-gray-300">{{ user.rol }}</p>
-      </div>
-
-      <!-- Links -->
-      <router-link @click="cerrarMenu" to="/dashboard" v-if="puedeAcceder('dashboard')" class="block py-2 hover:bg-gray-600 rounded">Dashboard</router-link>
-      <router-link @click="cerrarMenu" to="/aserrin" v-if="puedeAcceder('aserrin')" class="block py-2 hover:bg-gray-600 rounded">Aserrín</router-link>
-      <router-link @click="cerrarMenu" to="/produccion" v-if="puedeAcceder('produccion')" class="block py-2 hover:bg-gray-600 rounded">Producción</router-link>
-      <router-link @click="cerrarMenu" to="/horno" v-if="puedeAcceder('horno')" class="block py-2 hover:bg-gray-600 rounded">Horno</router-link>
-      <router-link @click="cerrarMenu" to="/asistencia" v-if="puedeAcceder('asistencia')" class="block py-2 hover:bg-gray-600 rounded">Asistencia</router-link>
-      <router-link @click="cerrarMenu" to="/despacho" v-if="puedeAcceder('despacho')" class="block py-2 hover:bg-gray-600 rounded">Entrega</router-link>
-      <router-link @click="cerrarMenu" to="/lena" v-if="puedeAcceder('lena')" class="block py-2 hover:bg-gray-600 rounded">Leña</router-link>
-
-      <!-- Botón Logout -->
-      <button @click="logout" class="w-full mt-4 bg-red-500 hover:bg-red-600 px-4 py-2 rounded text-white">
-        Cerrar sesión
-      </button>
-    </div>
-  </nav>
+  </div>
 </template>
 
 <script setup>
-import { supabase } from '@/lib/supabase'
-import { useRouter } from 'vue-router'
-import { ref } from 'vue'
+import { computed } from 'vue'
+import { useRoute, RouterLink, RouterView } from 'vue-router'
+import NavDropdown from '@/components/navDropdown.vue'
+import { useUserStore } from '@/stores/userStore'
+import { normalizeRole } from '@/services/authService'
 
-const props = defineProps({ user: Object })
-const router = useRouter()
-const menuAbierto = ref(false)
+const route = useRoute()
+const year = new Date().getFullYear()
+const currentTitle = computed(() => route.meta?.title ?? 'Dashboard')
 
-const logout = async () => {
-  await supabase.auth.signOut()
-  localStorage.clear()
-  router.push('/login')
+const auth = useUserStore()
+const isLoaded = computed(() => auth.isLoaded)
+const role = computed(() =>
+  normalizeRole(auth?.rol || (typeof localStorage !== 'undefined' ? localStorage.getItem('role') : null))
+)
+
+// Nombre del usuario
+const username = computed(() =>
+  auth?.nombre || (typeof localStorage !== 'undefined' ? localStorage.getItem('nombre') : 'Usuario')
+)
+
+// Etiqueta del rol (con mayúsculas)
+const roleLabel = computed(() => {
+  const r = role.value
+  if (!r) return ''
+  return r.charAt(0).toUpperCase() + r.slice(1)
+})
+
+function visibleItems(items) {
+  const r = role.value
+  if (!isLoaded.value || !r) return []
+  return items.filter(i => !i.roles?.length || i.roles.includes(r))
 }
 
-const cerrarMenu = () => {
-  menuAbierto.value = false
+async function logout() {
+  try { await auth.logout() } catch (e) { console.error(e) }
 }
 
-// Control de acceso basado en rol
-const puedeAcceder = (pagina) => {
-  const rol = props.user?.rol
-  if (rol === 'admin' || rol === 'Super Admin') return true
-  if (rol === 'supervisor' || rol === 'Supervisor') return ['aserrin', 'produccion', 'horno', 'asistencia', 'despacho', 'lena'].includes(pagina)
-  if (rol === 'opera' || rol === 'Operador') return ['horno', 'aserrin','produccion'].includes(pagina)
-  return false
+const menu = {
+  operaciones: [
+    { label: 'Plan de Producción', to: '/operaciones/plan', roles: ['superadmin','supervisor'] },
+    { label: 'Producción', to: '/operaciones/produccion', roles: ['superadmin','supervisor','operador'] },
+    { label: 'Paradas Técnicas', to: '/operaciones/paradas', roles: ['superadmin','supervisor',] },
+    { label: 'Horas por Máquina', to: '/operaciones/horas-maquina', roles: ['superadmin','supervisor'] },
+    { label: 'Mantenimiento', to: '/operaciones/mantenimiento', roles: ['superadmin','supervisor'] },
+    { label: 'Repuestos', to: '/operaciones/repuestos', roles: ['superadmin','supervisor'] },
+    { label: 'Máquinas', to: '/operaciones/maquinas', roles: ['superadmin','supervisor'] },
+    { label: 'Aserrín (recepción)', to: '/operaciones/aserrin', roles: ['superadmin','supervisor',] },
+    { label: 'Horno (secado)', to: '/operaciones/horno', roles: ['superadmin','supervisor','operador'] },
+    { label: 'Leña', to: '/operaciones/lena', roles: ['superadmin','supervisor',] },
+    { label: 'Entrega de Producto', to: '/operaciones/despacho', roles: ['superadmin','supervisor'] },
+    { label: 'Fundas Plásticas', to: '/operaciones/fundas/registro', roles: ['superadmin','supervisor',] }
+  ],
+  talento: [
+    { label: 'Asistencia', to: '/talento/asistencia', roles: ['superadmin','supervisor'] }
+  ],
+  comercial: [
+    { label: 'Reportes Comerciales', to: '/comercial/reportes', roles: ['superadmin','supervisor'] }
+  ],
+  admin: [
+    { label: 'Usuarios & Roles', to: '/admin/usuarios', roles: ['superadmin','supervisor'] }
+  ]
 }
 </script>

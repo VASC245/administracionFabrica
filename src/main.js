@@ -1,17 +1,11 @@
 import './assets/main.css'
-
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-
 import App from './App.vue'
 import router from './router'
-import VueApexCharts from 'vue3-apexcharts'
-
-
 const app = createApp(App)
-
-app.use(VueApexCharts)
 app.use(createPinia())
 app.use(router)
-
+import { useUserStore } from '@/stores/userStore'
+useUserStore().ensureLoaded()  // carga sesión/rol si ya había login
 app.mount('#app')

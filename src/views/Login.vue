@@ -3,69 +3,30 @@
     <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
       <h2 class="text-2xl font-bold text-center mb-6">Iniciar Sesión</h2>
 
-      <!-- FORMULARIO LOGIN -->
-      <form @submit.prevent="login" class="space-y-4">
-        <input
-          v-model="email"
-          type="email"
-          placeholder="Correo electrónico"
-          class="w-full border px-3 py-2 rounded-lg"
-          required
-        />
-        <input
-          v-model="password"
-          type="password"
-          placeholder="Contraseña"
-          class="w-full border px-3 py-2 rounded-lg"
-          required
-        />
-        <button
-          type="submit"
-          class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-semibold"
-        >
+      <form @submit.prevent="onLogin" class="space-y-4">
+        <input v-model="email" type="email" placeholder="Correo electrónico" class="w-full border px-3 py-2 rounded-lg" required />
+        <input v-model="password" type="password" placeholder="Contraseña" class="w-full border px-3 py-2 rounded-lg" required />
+        <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-semibold">
           Iniciar Sesión
         </button>
       </form>
 
-      <!-- MENSAJES -->
       <p v-if="mensaje" :class="mensajeColor" class="mt-4 text-center font-semibold">{{ mensaje }}</p>
 
-      <!-- BOTÓN PARA REGISTRARSE -->
       <div class="mt-6 text-center">
-        <button
-          @click="mostrarModal = true"
-          class="text-blue-600 hover:underline text-sm"
-        >
+        <button @click="mostrarModal = true" class="text-blue-600 hover:underline text-sm">
           ¿No tienes cuenta? Registrarse
         </button>
       </div>
 
-      <!-- MODAL PARA INGRESAR CÓDIGO -->
-      <div
-        v-if="mostrarModal"
-        class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50"
-      >
+      <!-- Modal PIN -->
+      <div v-if="mostrarModal" class="fixed inset-0 bg-gray-900/50 flex items-center justify-center z-50">
         <div class="bg-white rounded-xl shadow-lg p-6 w-full max-w-sm text-center">
           <h3 class="text-lg font-bold mb-4">Código de acceso</h3>
-          <input
-            v-model="codigoPin"
-            type="password"
-            placeholder="Ingresa el código"
-            class="w-full border px-3 py-2 rounded-lg mb-4"
-          />
+          <input v-model="codigoPin" type="password" placeholder="Ingresa el código" class="w-full border px-3 py-2 rounded-lg mb-4" />
           <div class="flex gap-4">
-            <button
-              @click="verificarPin"
-              class="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700"
-            >
-              Continuar
-            </button>
-            <button
-              @click="cerrarModal"
-              class="w-full bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600"
-            >
-              Cancelar
-            </button>
+            <button @click="verificarPin" class="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700">Continuar</button>
+            <button @click="cerrarModal" class="w-full bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600">Cancelar</button>
           </div>
           <p v-if="errorPin" class="text-red-500 text-sm mt-2">{{ errorPin }}</p>
         </div>
@@ -76,10 +37,15 @@
 
 <script setup>
 import { ref } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { supabase } from '@/lib/supabase'
-import { useRouter } from 'vue-router'
+import { useUserStore } from '@/stores/userStore'
+import { normalizeRole, persistSessionToLocal } from '@/services/authService'
 
 const router = useRouter()
+const route = useRoute()
+const store = useUserStore()
+
 const email = ref('')
 const password = ref('')
 const mensaje = ref('')
@@ -88,12 +54,10 @@ const mostrarModal = ref(false)
 const codigoPin = ref('')
 const errorPin = ref('')
 
-// ✅ Login con roles desde la tabla `users`
-const login = async () => {
+const onLogin = async () => {
   mensaje.value = ''
   const { data, error } = await supabase.auth.signInWithPassword({
-    email: email.value,
-    password: password.value
+    email: email.value, password: password.value
   })
 
   if (error) {
@@ -103,39 +67,27 @@ const login = async () => {
   }
 
   const user = data.user
-
-  // ✅ Consultar el rol en la tabla "users"
-  const { data: perfil, error: perfilError } = await supabase
+  const { data: perfil, error: e2 } = await supabase
     .from('users')
-    .select('rol, estado')
+    .select('rol, nombre, estado')
     .eq('id', user.id)
     .single()
 
-  if (perfilError || !perfil) {
-    mensaje.value = 'No se encontró el perfil del usuario'
-    mensajeColor.value = 'text-red-500'
-    return
-  }
+  if (e2 || !perfil) { mensaje.value = 'No se encontró el perfil del usuario'; mensajeColor.value='text-red-500'; return }
+  if (!perfil.estado) { mensaje.value = 'Usuario inactivo'; mensajeColor.value='text-red-500'; return }
 
-  if (!perfil.estado) {
-    mensaje.value = 'Usuario inactivo'
-    mensajeColor.value = 'text-red-500'
-    return
-  }
+  const role = normalizeRole(perfil.rol)
+  persistSessionToLocal(user, role)
 
-  // ✅ Guardar rol y datos en localStorage
-  localStorage.setItem('role', perfil.rol)
-  localStorage.setItem('user', JSON.stringify(user))
+  await store.loadUser()
 
   mensaje.value = 'Inicio de sesión exitoso'
   mensajeColor.value = 'text-green-600'
 
-  setTimeout(() => {
-    router.push('/dashboard')
-  }, 600)
+  const target = route.query?.redirect ? decodeURIComponent(String(route.query.redirect)) : '/dashboard'
+  setTimeout(() => router.replace(target), 400)
 }
 
-// ✅ Verificar PIN fijo para registro
 const verificarPin = () => {
   if (codigoPin.value === 'FABRICA2025') {
     mostrarModal.value = false
@@ -144,11 +96,5 @@ const verificarPin = () => {
     errorPin.value = 'Código incorrecto'
   }
 }
-
-// ✅ Cerrar modal
-const cerrarModal = () => {
-  mostrarModal.value = false
-  codigoPin.value = ''
-  errorPin.value = ''
-}
+const cerrarModal = () => { mostrarModal.value = false; codigoPin.value=''; errorPin.value='' }
 </script>

@@ -33,6 +33,9 @@
       <button @click="cargarDatos" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700">
         Filtrar
       </button>
+      <button @click="limpiar" class="bg-gray-200 px-4 py-2 rounded-lg hover:bg-gray-300">
+        Limpiar
+      </button>
     </div>
 
     <!-- GRÁFICO OPERACIÓN FÁBRICA -->
@@ -49,7 +52,10 @@
 
     <!-- GRÁFICO DE ASERRÍN -->
     <div class="bg-white rounded-lg shadow p-6 mt-8">
-      <h2 class="text-xl font-semibold mb-4">Ingreso de Aserrín (Palas por Proveedor)</h2>
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="text-xl font-semibold">Ingreso de Aserrín (Palas por Proveedor)</h2>
+        <div class="text-sm text-gray-500">Total: <b>{{ totalAserrin }}</b> palas</div>
+      </div>
       <apexchart
         width="100%"
         height="350"
@@ -59,9 +65,13 @@
       />
     </div>
 
-    <!-- GRÁFICO DEL HORNO -->
+    <!-- GRÁFICO DEL HORNO + PROMEDIOS -->
     <div class="bg-white rounded-lg shadow p-6 mt-8">
-      <h2 class="text-xl font-semibold mb-4">Gráfico Operación del Horno (hoy)</h2>
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-semibold">Operación del Horno {{ rangoTexto }}</h2>
+        <div class="text-sm text-gray-500" v-if="horasHorno.length">Registros: <b>{{ horasHorno.length }}</b></div>
+      </div>
+
       <apexchart
         width="100%"
         height="450"
@@ -70,9 +80,9 @@
         :series="hornoSeries"
       />
 
-      <!-- Tabla Promedios debajo del gráfico -->
+      <!-- Tabla Promedios -->
       <div class="mt-6">
-        <h2 class="text-lg font-semibold mb-4 text-center">Promedio del Horno</h2>
+        <h2 class="text-lg font-semibold mb-4 text-center">Promedio del Horno ({{ rangoTexto }})</h2>
         <table class="w-full border text-sm">
           <thead class="bg-gray-100 text-center">
             <tr>
@@ -81,34 +91,13 @@
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td class="border px-4 py-2">Jampa</td>
-              <td class="border px-4 py-2 text-center font-semibold">{{ promedioJampa }}</td>
-            </tr>
-            <tr>
-              <td class="border px-4 py-2">Viruta</td>
-              <td class="border px-4 py-2 text-center font-semibold">{{ promedioViruta }}</td>
-            </tr>
-            <tr>
-              <td class="border px-4 py-2">Pellet</td>
-              <td class="border px-4 py-2 text-center font-semibold">{{ promedioPellet }}</td>
-            </tr>
-            <tr>
-              <td class="border px-4 py-2">T. Entrada (°C)</td>
-              <td class="border px-4 py-2 text-center font-semibold">{{ promedioEntrada }}°C</td>
-            </tr>
-            <tr>
-              <td class="border px-4 py-2">T. Salida (°C)</td>
-              <td class="border px-4 py-2 text-center font-semibold">{{ promedioSalida }}°C</td>
-            </tr>
-            <tr>
-              <td class="border px-4 py-2">Humedad (%)</td>
-              <td class="border px-4 py-2 text-center font-semibold">{{ promedioHumedad }}%</td>
-            </tr>
-            <tr>
-              <td class="border px-4 py-2">Amperios</td>
-              <td class="border px-4 py-2 text-center font-semibold">{{ promedioAmperios }} A</td>
-            </tr>
+            <tr><td class="border px-4 py-2">Jampa</td>             <td class="border px-4 py-2 text-center font-semibold">{{ promedioJampa }}</td></tr>
+            <tr><td class="border px-4 py-2">Viruta</td>            <td class="border px-4 py-2 text-center font-semibold">{{ promedioViruta }}</td></tr>
+            <tr><td class="border px-4 py-2">Pellet</td>            <td class="border px-4 py-2 text-center font-semibold">{{ promedioPellet }}</td></tr>
+            <tr><td class="border px-4 py-2">T. Entrada (°C)</td>   <td class="border px-4 py-2 text-center font-semibold">{{ promedioEntrada }}°C</td></tr>
+            <tr><td class="border px-4 py-2">T. Salida (°C)</td>    <td class="border px-4 py-2 text-center font-semibold">{{ promedioSalida }}°C</td></tr>
+            <tr><td class="border px-4 py-2">Humedad (%)</td>       <td class="border px-4 py-2 text-center font-semibold">{{ promedioHumedad }}%</td></tr>
+            <tr><td class="border px-4 py-2">Amperios</td>          <td class="border px-4 py-2 text-center font-semibold">{{ promedioAmperios }} A</td></tr>
           </tbody>
         </table>
       </div>
@@ -117,173 +106,200 @@
 </template>
 
 <script setup>
-import { ref, onMounted, shallowRef } from "vue";
-import { supabase } from "@/lib/supabase";
+import { ref, onMounted, shallowRef, computed } from 'vue'
+import VueApexCharts from 'vue3-apexcharts'
+import { supabase } from '@/lib/supabase'
 
-/* ===== Helpers de fecha/hora local (evitan UTC) ===== */
+const apexchart = VueApexCharts
+
+/* ===== Helpers de fecha local ===== */
 function getLocalDate() {
-  const now = new Date();
-  const tzoffset = now.getTimezoneOffset() * 60000;
-  return new Date(now.getTime() - tzoffset).toISOString().slice(0, 10); // yyyy-mm-dd local
-}
-function getLocalTime() {
-  const now = new Date();
-  const hh = String(now.getHours()).padStart(2, "0");
-  const mm = String(now.getMinutes()).padStart(2, "0");
-  return `${hh}:${mm}`;
+  const now = new Date()
+  const tzoffset = now.getTimezoneOffset() * 60000
+  return new Date(now.getTime() - tzoffset).toISOString().slice(0, 10)
 }
 
-const fechaInicio = ref("");
-const fechaFin = ref("");
-const totalProduccion = ref(0);
-const totalDespachos = ref(0);
-const totalAserrin = ref(0);
-const stockActual = ref(0);
+/* ===== Filtros ===== */
+const fechaInicio = ref('')
+const fechaFin = ref('')
 
-/* Usamos shallowRef para evitar problemas de reactive deep en Apex */
-const comparativoSeries = shallowRef([]);
+/* ===== KPIs ===== */
+const totalProduccion = ref(0)
+const totalDespachos  = ref(0)
+const stockActual     = ref(0)
+const totalAserrin    = ref(0)
+
+/* ===== Comparativo ===== */
+const comparativoSeries = shallowRef([])
 const chartComparativoOptions = shallowRef({
   chart: { toolbar: { show: true }, zoom: { enabled: true } },
-  xaxis: { categories: [], title: { text: "Fechas" }, labels: { rotate: -45 } },
-  stroke: { curve: "smooth" },
-  colors: ["#2563eb", "#10b981", "#f59e0b"],
+  xaxis: { categories: [], title: { text: 'Fechas' }, labels: { rotate: -45 } },
+  stroke: { curve: 'smooth' },
+  colors: ['#2563eb', '#10b981', '#f59e0b'],
   dataLabels: { enabled: false },
   tooltip: { shared: true, intersect: false },
-  legend: { position: "top" },
-});
+  legend: { position: 'top' }
+})
 
-const aserrinSeries = shallowRef([]);
+/* ===== Aserrín ===== */
+const aserrinSeries = shallowRef([])
 const chartAserrinOptions = shallowRef({
   chart: {
     toolbar: {
       show: true,
-      tools: { download: true, selection: true, zoom: true, zoomin: true, zoomout: true, pan: true, reset: true },
+      tools: { download: true, selection: true, zoom: true, zoomin: true, zoomout: true, pan: true, reset: true }
     },
-    zoom: { enabled: true, type: "x", autoScaleYaxis: true },
+    zoom: { enabled: true, type: 'x', autoScaleYaxis: true }
   },
-  xaxis: { categories: [], title: { text: "Fecha" } },
-  stroke: { curve: "smooth" },
-  colors: ["#6366f1"],
+  xaxis: { categories: [], title: { text: 'Fecha' } },
+  stroke: { curve: 'smooth' },
+  colors: ['#6366f1'],
   tooltip: {
-    custom: function ({ series, seriesIndex, dataPointIndex, w }) {
-      const proveedor = (w?.config?.series?.[seriesIndex]?.meta?.[dataPointIndex]) || "—";
-      const palas = series?.[seriesIndex]?.[dataPointIndex] ?? 0;
-      return `<div class="p-2"><b>${palas} palas</b><br>Proveedor: ${proveedor}</div>`;
-    },
-  },
-});
+    custom: ({ series, seriesIndex, dataPointIndex, w }) => {
+      const proveedor = (w?.config?.series?.[seriesIndex]?.meta?.[dataPointIndex]) || '—'
+      const palas = series?.[seriesIndex]?.[dataPointIndex] ?? 0
+      return `<div class="p-2"><b>${palas} palas</b><br>Proveedor: ${proveedor}</div>`
+    }
+  }
+})
 
-const hornoSeries = shallowRef([]);
+/* ===== Horno ===== */
+const hornoSeries = shallowRef([])
 const chartHornoOptions = shallowRef({
   chart: { toolbar: { show: true }, zoom: { enabled: true } },
-  stroke: { curve: "smooth" },
-  colors: ["#ef4444", "#3b82f6", "#10b981", "#f59e0b"],
-  xaxis: { categories: [], title: { text: "Hora" } },
-});
+  stroke: { curve: 'smooth', width: 2 },
+  colors: ['#ef4444', '#3b82f6', '#10b981', '#f59e0b'],
+  xaxis: { categories: [], title: { text: 'Hora' } },
+  tooltip: { shared: true, intersect: false }
+})
+const horasHorno = ref([])
+const rangoTexto = computed(() => (fechaInicio.value || fechaFin.value) ? '(rango)' : '(hoy)')
 
-// Promedios del horno (solo hoy)
-const promedioEntrada = ref(0);
-const promedioSalida = ref(0);
-const promedioHumedad = ref(0);
-const promedioAmperios = ref(0);
-const promedioJampa = ref(0);
-const promedioViruta = ref(0);
-const promedioPellet = ref(0);
+/* Promedios del horno */
+const promedioEntrada  = ref(0)
+const promedioSalida   = ref(0)
+const promedioHumedad  = ref(0)
+const promedioAmperios = ref(0)
+const promedioJampa    = ref(0)
+const promedioViruta   = ref(0)
+const promedioPellet   = ref(0)
 
 function safeAvg(arr) {
-  if (!arr || arr.length === 0) return 0;
-  const num = arr.reduce((a, n) => a + (Number(n) || 0), 0);
-  return +(num / arr.length).toFixed(1);
+  if (!arr || arr.length === 0) return 0
+  const num = arr.reduce((a, n) => a + (Number(n) || 0), 0)
+  return +(num / arr.length).toFixed(1)
 }
 
-const cargarDatos = async () => {
-  // Queries base
-  let qProd = supabase.from("produccion_fundas").select("*");
-  let qDesp = supabase.from("despachos").select("*");
-  let qAser = supabase.from("aserrin").select("*");
+/* ===== Carga de datos ===== */
+async function cargarDatos() {
+  // Producción / Despachos / Aserrín
+  let qProd = supabase.from('produccion_fundas').select('*')
+  let qDesp = supabase.from('despachos').select('*')
+  let qAser = supabase.from('aserrin').select('*')
 
-  // Filtro por fechas (local YYYY-MM-DD)
   if (fechaInicio.value && fechaFin.value) {
-    qProd = qProd.gte("fecha", fechaInicio.value).lte("fecha", fechaFin.value);
-    qDesp = qDesp.gte("fecha", fechaInicio.value).lte("fecha", fechaFin.value);
-    qAser = qAser.gte("fecha", fechaInicio.value).lte("fecha", fechaFin.value);
+    qProd = qProd.gte('fecha', fechaInicio.value).lte('fecha', fechaFin.value)
+    qDesp = qDesp.gte('fecha', fechaInicio.value).lte('fecha', fechaFin.value)
+    qAser = qAser.gte('fecha', fechaInicio.value).lte('fecha', fechaFin.value)
   }
 
-  const [{ data: produccion = [] }, { data: despachos = [] }, { data: aserrin = [] }] = await Promise.all([
-    qProd,
-    qDesp,
-    qAser,
-  ]);
+  const [{ data: produccion = [] }, { data: despachos = [] }, { data: aserrin = [] }] =
+    await Promise.all([qProd, qDesp, qAser])
 
-  // Resúmenes
-  totalProduccion.value = produccion.reduce((a, p) => a + (p.fundas || 0), 0);
-  totalDespachos.value = despachos.reduce((a, d) => a + (d.fundas_actual || 0), 0);
-  stockActual.value = totalProduccion.value - totalDespachos.value;
-  totalAserrin.value = aserrin.reduce((a, r) => a + (r.palas || 0), 0);
+  // KPIs
+  totalProduccion.value = produccion.reduce((a, p) => a + (p.fundas || 0), 0)
+  totalDespachos.value  = despachos.reduce((a, d) => a + (d.fundas_actual || 0), 0)
+  stockActual.value     = totalProduccion.value - totalDespachos.value
+  totalAserrin.value    = aserrin.reduce((a, r) => a + (r.palas || 0), 0)
 
-  // ---------- Gráfico comparativo (Producción vs Despachos vs Stock) ----------
-  const fechas = [...new Set([...produccion.map(p => p.fecha), ...despachos.map(d => d.fecha)])].sort();
-  const prodPorFecha = fechas.map(f => produccion.filter(p => p.fecha === f).reduce((a, p) => a + (p.fundas || 0), 0));
-  const despPorFecha = fechas.map(f => despachos.filter(d => d.fecha === f).reduce((a, d) => a + (d.fundas_actual || 0), 0));
-
-  let stockAcumulado = 0;
-  const stockPorFecha = fechas.map((_, i) => {
-    stockAcumulado += (prodPorFecha[i] || 0) - (despPorFecha[i] || 0);
-    return stockAcumulado;
-  });
+  // Gráfico comparativo
+  const fechas = [...new Set([...produccion.map(p => p.fecha), ...despachos.map(d => d.fecha)])].sort()
+  const prodPorFecha = fechas.map(f => produccion.filter(p => p.fecha === f).reduce((a, p) => a + (p.fundas || 0), 0))
+  const despPorFecha = fechas.map(f => despachos.filter(d => d.fecha === f).reduce((a, d) => a + (d.fundas_actual || 0), 0))
+  let stockAcc = 0
+  const stockPorFecha = fechas.map((_, i) => (stockAcc += (prodPorFecha[i] || 0) - (despPorFecha[i] || 0)))
 
   chartComparativoOptions.value = {
     ...chartComparativoOptions.value,
-    xaxis: { ...chartComparativoOptions.value.xaxis, categories: fechas },
-  };
+    xaxis: { ...chartComparativoOptions.value.xaxis, categories: fechas }
+  }
   comparativoSeries.value = [
-    { name: "Producción", data: prodPorFecha },
-    { name: "Entregadas", data: despPorFecha },
-    { name: "Stock Acumulado", data: stockPorFecha },
-  ];
+    { name: 'Producción', data: prodPorFecha },
+    { name: 'Entregadas', data: despPorFecha },
+    { name: 'Stock Acumulado', data: stockPorFecha }
+  ]
 
-  // ---------- Gráfico Aserrín (palas por fecha + proveedores en tooltip) ----------
-  const fechasAserrin = [...new Set(aserrin.map(a => a.fecha))].sort();
-  const palasPorFecha = fechasAserrin.map(f => aserrin.filter(a => a.fecha === f).reduce((a, r) => a + (r.palas || 0), 0));
-  const proveedores = fechasAserrin.map(f => aserrin.filter(a => a.fecha === f).map(r => r.proveedor).join(", ") || "—");
+  // Gráfico Aserrín
+  const fechasA = [...new Set(aserrin.map(a => a.fecha))].sort()
+  const palasPorFecha = fechasA.map(f => aserrin.filter(a => a.fecha === f).reduce((a, r) => a + (r.palas || 0), 0))
+  const proveedores = fechasA.map(f => aserrin.filter(a => a.fecha === f).map(r => r.proveedor).join(', ') || '—')
 
   chartAserrinOptions.value = {
     ...chartAserrinOptions.value,
-    xaxis: { ...chartAserrinOptions.value.xaxis, categories: fechasAserrin },
-  };
-  aserrinSeries.value = [{ name: "Palas", data: palasPorFecha, meta: proveedores }];
+    xaxis: { ...chartAserrinOptions.value.xaxis, categories: fechasA }
+  }
+  aserrinSeries.value = [{ name: 'Palas', data: palasPorFecha, meta: proveedores }]
 
-  // ---------- Gráfico del horno (solo HOY local) ----------
-  const hoyLocal = getLocalDate();
-  const { data: hornoHoy = [] } = await supabase.from("horno").select("*").eq("fecha", hoyLocal).order("hora", { ascending: true });
+  // Horno
+  await loadHorno()
+}
 
-  const horas = hornoHoy.map(h => h.hora || "—");
-  const serieEntrada = hornoHoy.map(h => h.temperatura_entrada ?? null);
-  const serieSalida  = hornoHoy.map(h => h.temperatura_salida ?? null);
-  const serieHum     = hornoHoy.map(h => h.humedad ?? null);
-  const serieAmp     = hornoHoy.map(h => h.amperios ?? null);
+async function loadHorno() {
+  let q = supabase.from('horno').select('*')
+  if (fechaInicio.value && fechaFin.value) {
+    q = q.gte('fecha', fechaInicio.value).lte('fecha', fechaFin.value)
+  } else {
+    q = q.eq('fecha', getLocalDate())
+  }
 
-  // Asegura longitudes alineadas
+  const { data: rows = [], error } = await q.order('fecha', { ascending: true }).order('hora', { ascending: true })
+  if (error) {
+    console.error('[horno] error:', error)
+    hornoSeries.value = []
+    horasHorno.value = []
+    promedioEntrada.value = promedioSalida.value = promedioHumedad.value = promedioAmperios.value = 0
+    promedioJampa.value = promedioViruta.value = promedioPellet.value = 0
+    return
+  }
+
+  const x = rows.map(r => {
+    const h = r.hora ?? ''
+    const f = r.fecha ?? ''
+    if (fechaInicio.value && fechaFin.value) return `${f} ${h}`
+    return h || f || ''
+  })
+  horasHorno.value = x
+
+  const serieEntrada = rows.map(r => r.temperatura_entrada ?? null)
+  const serieSalida  = rows.map(r => r.temperatura_salida  ?? null)
+  const serieHum     = rows.map(r => r.humedad             ?? null)
+  const serieAmp     = rows.map(r => r.amperios            ?? null)
+
   chartHornoOptions.value = {
     ...chartHornoOptions.value,
-    xaxis: { ...chartHornoOptions.value.xaxis, categories: horas },
-  };
+    xaxis: { ...chartHornoOptions.value.xaxis, categories: x }
+  }
   hornoSeries.value = [
-    { name: "Temp Entrada", data: serieEntrada },
-    { name: "Temp Salida",  data: serieSalida  },
-    { name: "Humedad",      data: serieHum     },
-    { name: "Amperios",     data: serieAmp     },
-  ];
+    { name: 'Temp Entrada', data: serieEntrada },
+    { name: 'Temp Salida',  data: serieSalida  },
+    { name: 'Humedad',      data: serieHum     },
+    { name: 'Amperios',     data: serieAmp     }
+  ]
 
-  // Promedios (solo hoy)
-  promedioJampa.value    = safeAvg(hornoHoy.map(h => h.jampa));
-  promedioViruta.value   = safeAvg(hornoHoy.map(h => h.viruta));
-  promedioPellet.value   = safeAvg(hornoHoy.map(h => h.pellet));
-  promedioEntrada.value  = safeAvg(hornoHoy.map(h => h.temperatura_entrada));
-  promedioSalida.value   = safeAvg(hornoHoy.map(h => h.temperatura_salida));
-  promedioHumedad.value  = safeAvg(hornoHoy.map(h => h.humedad));
-  promedioAmperios.value = safeAvg(hornoHoy.map(h => h.amperios));
-};
+  promedioEntrada.value  = safeAvg(rows.map(r => r.temperatura_entrada))
+  promedioSalida.value   = safeAvg(rows.map(r => r.temperatura_salida))
+  promedioHumedad.value  = safeAvg(rows.map(r => r.humedad))
+  promedioAmperios.value = safeAvg(rows.map(r => r.amperios))
+  promedioJampa.value    = safeAvg(rows.map(r => r.jampa))
+  promedioViruta.value   = safeAvg(rows.map(r => r.viruta))
+  promedioPellet.value   = safeAvg(rows.map(r => r.pellet))
+}
 
-onMounted(cargarDatos);
+function limpiar() {
+  fechaInicio.value = ''
+  fechaFin.value = ''
+  cargarDatos()
+}
+
+onMounted(cargarDatos)
 </script>

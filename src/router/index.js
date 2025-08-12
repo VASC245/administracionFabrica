@@ -1,61 +1,166 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { supabase } from '@/lib/supabase'
-
-import Dashboard from '@/pages/Dashboard.vue'
-import Lena from '@/pages/Lena.vue'
-import Aserrin from '@/pages/Aserrin.vue'
-import Produccion from '@/pages/Produccion.vue'
-import Horno from '@/pages/Horno.vue'
-import Asistencia from '@/pages/Asistencia.vue'
-import Despacho from '@/pages/Despacho.vue'
-import Login from '@/views/Login.vue'
-import Register from '@/views/Register.vue'
+import Layout from '@/components/Layout.vue'
+import { useUserStore } from '@/stores/userStore'
+import { normalizeRole } from '@/services/authService'
 
 const routes = [
-  { path: '/login', name: 'Login', component: Login },
-  { path: '/register', name: 'Register', component: Register },
+  // Shell principal + Dashboard (solo Super Admin)
+  {
+    path: '/',
+    component: Layout,
+    children: [
+      {
+        path: '',
+        name: 'dashboard',
+        component: () => import('@/pages/Dashboard.vue'),
+        meta: { title: 'Dashboard', roles: ['superadmin'] } // ← sólo superadmin
+      }
+    ]
+  },
 
-  { path: '/dashboard', name: 'Dashboard', component: Dashboard },
-  { path: '/aserrin', name: 'Aserrin', component: Aserrin },
-  { path: '/produccion', name: 'Produccion', component: Produccion },
-  { path: '/horno', name: 'Horno', component: Horno },
-  { path: '/asistencia', name: 'Asistencia', component: Asistencia },
-  { path: '/despacho', name: 'Despacho', component: Despacho },
-  {path: '/lena', name:'Leña', component: Lena},
+  // OPERACIONES
+  {
+    path: '/operaciones',
+    component: Layout,
+    meta: { section: 'Operaciones' },
+    children: [
+      { path: '', redirect: { name: 'operaciones-plan' } },
 
-  { path: '/', redirect: '/login' }
+      { path: 'plan', name: 'operaciones-plan',
+        component: () => import('@/pages/planProduccion.vue'),
+        meta: { title: 'Plan de Producción', roles: ['superadmin','supervisor'] } },
+
+      { path: 'produccion', name: 'operaciones-produccion',
+        component: () => import('@/pages/operaciones/Produccion.vue'),
+        meta: { title: 'Producción', roles: ['superadmin','supervisor','operador'] } },
+
+      { path: 'paradas', name: 'operaciones-paradas',
+        component: () => import('@/pages/controlParadas.vue'),
+        meta: { title: 'Paradas Técnicas', roles: ['superadmin','supervisor','operador'] } },
+
+      { path: 'horas-maquina', name: 'operaciones-horas',
+        component: () => import('@/pages/horasMaquina.vue'),
+        meta: { title: 'Horas por Máquina', roles: ['superadmin','supervisor'] } },
+
+      { path: 'mantenimiento', name: 'operaciones-mantenimiento',
+        component: () => import('@/pages/Mantenimiento.vue'),
+        meta: { title: 'Mantenimiento', roles: ['superadmin','supervisor'] } },
+
+      { path: 'repuestos', name: 'operaciones-repuestos',
+        component: () => import('@/pages/inventarioRepuestos.vue'),
+        meta: { title: 'Repuestos', roles: ['superadmin','supervisor'] } },
+
+      { path: 'maquinas', name: 'operaciones-maquinas',
+        component: () => import('@/pages/Maquinas.vue'),
+        meta: { title: 'Máquinas', roles: ['superadmin','supervisor'] } },
+
+      { path: 'aserrin', name: 'operaciones-aserrin',
+        component: () => import('@/pages/operaciones/Aserrin.vue'),
+        meta: { title: 'Aserrín (recepción)', roles: ['superadmin','supervisor','operador'] } },
+
+      { path: 'horno', name: 'operaciones-horno',
+        component: () => import('@/pages/operaciones/Horno.vue'),
+        meta: { title: 'Horno (secado)', roles: ['superadmin','supervisor','operador'] } },
+
+      { path: 'lena', name: 'operaciones-lena',
+        component: () => import('@/pages/operaciones/Lena.vue'),
+        meta: { title: 'Leña / Combustible', roles: ['superadmin','supervisor','operador'] } },
+
+      { path: 'despacho', name: 'operaciones-despacho',
+        component: () => import('@/pages/operaciones/Despacho.vue'),
+        meta: { title: 'Despacho PT', roles: ['superadmin','supervisor'] } },
+
+      { path: 'fundas/registro', name: 'operaciones-fundas-registro',
+        component: () => import('@/pages/operaciones/FundasPlasticas.vue'),
+        meta: { title: 'Fundas Plásticas', roles: ['superadmin','supervisor','operador'] } }
+    ]
+  },
+
+  // TALENTO
+  {
+    path: '/talento',
+    component: Layout,
+    meta: { section: 'Talento Humano' },
+    children: [
+      { path: 'asistencia', name: 'talento-asistencia',
+        component: () => import('@/pages/th/Asistencia.vue'),
+        meta: { title: 'Asistencia', roles: ['superadmin','supervisor'] } }
+    ]
+  },
+
+  // COMERCIAL
+  {
+    path: '/comercial',
+    component: Layout,
+    meta: { section: 'Comercial' },
+    children: [
+      { path: 'reportes', name: 'comercial-reportes',
+        component: () => import('@/pages/ReporteComponent.vue'),
+        meta: { title: 'Reportes Comerciales', roles: ['superadmin','supervisor'] } }
+    ]
+  },
+
+  // ADMIN (usuarios/roles)
+  {
+    path: '/admin/usuarios',
+    component: Layout,
+    children: [
+      {
+        path: '',
+        name: 'admin-usuarios',
+        component: () => import('@/pages/admin/UsersRoles.vue'),
+        meta: { title: 'Usuarios & Roles', roles: ['superadmin','supervisor'] }
+      }
+    ]
+  },
+
+  // AUTH públicas
+  { path: '/login', name: 'login',
+    component: () => import('@/views/Login.vue'),
+    meta: { title: 'Ingresar', public: true } },
+  { path: '/register', name: 'register',
+    component: () => import('@/views/Register.vue'),
+    meta: { title: 'Registrarse', public: true } },
+
+  // 404
+  { path: '/:pathMatch(.*)*', redirect: { name: 'dashboard' } }
 ]
 
 const router = createRouter({
   history: createWebHistory(),
-  routes
+  routes,
+  scrollBehavior: () => ({ top: 0 })
 })
 
-//  Protección de rutas
 router.beforeEach(async (to, from, next) => {
-  const publicPages = ['/login', '/register']
-  const authRequired = !publicPages.includes(to.path)
+  const auth = useUserStore()
+  await auth.ensureLoaded().catch(() => null)
 
-  const { data: sessionData } = await supabase.auth.getSession()
-  const session = sessionData?.session
+  const isPublic   = !!to.meta?.public
+  const isAuthPage = to.name === 'login' || to.name === 'register'
+  const isLogged   = !!auth.user
 
-  if (authRequired && !session) {
-    return next('/login')
+  // rol normalizado (Super Admin / Supervisor / Operador)
+  const rawRol  = auth?.rol || (typeof localStorage !== 'undefined' ? localStorage.getItem('role') : null)
+  const userRol = normalizeRole(rawRol)
+
+  const required = Array.isArray(to.meta?.roles) ? to.meta.roles : []
+
+  if (isAuthPage && isLogged) {
+    const target = to.query?.redirect ? decodeURIComponent(String(to.query.redirect)) : '/'
+    return next(target)
   }
+  if (isPublic) return next()
+  if (!isLogged) return next({ name: 'login', query: { redirect: to.fullPath } })
 
-  if (session) {
-    const { data: user } = await supabase.from('users').select('rol').eq('id', session.user.id).single()
-    const rol = user?.rol
-
-    if (rol === 'Operador' && !['/horno', '/aserrin','/produccion'].includes(to.path)) {
-      return next('/horno')
+  if (required.length) {
+    const requiredNorm = required.map(r => normalizeRole(r))
+    if (!userRol || !requiredNorm.includes(userRol)) {
+      // sin acceso → manda a la primera ruta que sí pueda ver o al login
+      if (userRol === 'supervisor') return next({ name: 'operaciones-produccion' })
+      if (userRol === 'operador')   return next({ name: 'operaciones-produccion' })
+      return next({ name: 'login' })
     }
-
-    if (rol === 'Supervisor' && !['/horno', '/aserrin', '/produccion', '/asistencia', '/despacho', '/leña'].includes(to.path)) {
-      return next('/aserrin')
-    }
-
-    // Super Admin accede a todo
   }
 
   next()
