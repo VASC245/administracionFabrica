@@ -123,7 +123,7 @@ const menu = {
     { label: 'Plan de Producción', to: '/operaciones/plan', roles: ['superadmin','supervisor'] },
     { label: 'Producción', to: '/operaciones/produccion', roles: ['superadmin','supervisor','operador'] },
     { label: 'Paradas Técnicas', to: '/operaciones/paradas', roles: ['superadmin','supervisor',] },
-    { label: 'Horas por Máquina', to: '/operaciones/horas-maquina', roles: ['superadmin','supervisor'] },
+    { label: 'Horas por Máquina', to: '/operaciones/horas-maquina', roles: ['superadmin','supervisor','operador'] },
     { label: 'Mantenimiento', to: '/operaciones/mantenimiento', roles: ['superadmin','supervisor'] },
     { label: 'Repuestos', to: '/operaciones/repuestos', roles: ['superadmin','supervisor'] },
     { label: 'Máquinas', to: '/operaciones/maquinas', roles: ['superadmin','supervisor'] },
@@ -131,7 +131,7 @@ const menu = {
     { label: 'Horno (secado)', to: '/operaciones/horno', roles: ['superadmin','supervisor','operador'] },
     { label: 'Leña', to: '/operaciones/lena', roles: ['superadmin','supervisor',] },
     { label: 'Entrega de Producto', to: '/operaciones/despacho', roles: ['superadmin','supervisor'] },
-    { label: 'Fundas Plásticas', to: '/operaciones/fundas/registro', roles: ['superadmin','supervisor',] }
+    { label: 'Fundas Plásticas', to: '/operaciones/fundas/registro', roles: ['superadmin','supervisor','operador'] }
   ],
   talento: [
     { label: 'Asistencia', to: '/talento/asistencia', roles: ['superadmin','supervisor'] }

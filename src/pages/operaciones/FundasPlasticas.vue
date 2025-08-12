@@ -18,8 +18,47 @@
       </div>
     </div>
 
-    <!-- ======= ALTA / ENTRADA DE FUNDAS ======= -->
+    <!-- ======= ACCIONES ======= -->
+    <div class="flex flex-wrap items-center gap-3">
+      <button
+        type="button"
+        class="px-4 py-2 rounded-lg border hover:bg-gray-50"
+        @click="openClave()"
+      >
+        Registrar ingreso (compra) 🔒
+      </button>
+      <span class="text-sm text-gray-500">Requiere Contraseña</span>
+    </div>
+
+    <!-- ======= ROTURAS (DEFAULT) ======= -->
     <section class="space-y-4">
+      <h3 class="text-lg font-semibold">Registrar Fundas Rotas</h3>
+      <form @submit.prevent="saveRotura" class="grid md:grid-cols-5 gap-4 bg-gray-50 p-4 rounded-xl border">
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium">Funda</label>
+          <select v-model="rotura.funda_id" class="w-full border rounded-lg px-3 py-2" required>
+            <option value="">— Seleccionar —</option>
+            <option v-for="f in items" :key="f.id" :value="f.id">
+              {{ f.descripcion }} {{ f.medida ? `(${f.medida})` : '' }}
+            </option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium">Cantidad rota</label>
+          <input type="number" min="1" v-model.number="rotura.cantidad" class="w-full border rounded-lg px-3 py-2" required />
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium">Observación</label>
+          <input v-model="rotura.observacion" class="w-full border rounded-lg px-3 py-2" />
+        </div>
+        <div class="md:col-span-5">
+          <button class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700">Registrar Fundas</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- ======= ENTRADA / COMPRA (BLOQUEADA POR CLAVE) ======= -->
+    <section v-if="showEntrada" class="space-y-4">
       <h3 class="text-lg font-semibold">Registrar ingreso (compra)</h3>
       <form @submit.prevent="saveEntrada" class="grid md:grid-cols-6 gap-4 bg-gray-50 p-4 rounded-xl border">
         <div class="md:col-span-2">
@@ -59,37 +98,11 @@
           <input v-model="entrada.proveedor" class="w-full border rounded-lg px-3 py-2" />
         </div>
 
-        <div class="md:col-span-6">
+        <div class="md:col-span-6 flex items-center gap-2">
           <button class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700" :disabled="savingEntrada">
             {{ savingEntrada ? 'Guardando…' : 'Registrar ingreso' }}
           </button>
-        </div>
-      </form>
-    </section>
-
-    <!-- ======= ROTURAS ======= -->
-    <section class="space-y-4">
-      <h3 class="text-lg font-semibold">Registrar roturas</h3>
-      <form @submit.prevent="saveRotura" class="grid md:grid-cols-5 gap-4 bg-gray-50 p-4 rounded-xl border">
-        <div class="md:col-span-2">
-          <label class="block text-sm font-medium">Funda</label>
-          <select v-model="rotura.funda_id" class="w-full border rounded-lg px-3 py-2" required>
-            <option value="">— Seleccionar —</option>
-            <option v-for="f in items" :key="f.id" :value="f.id">
-              {{ f.descripcion }} {{ f.medida ? `(${f.medida})` : '' }}
-            </option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-sm font-medium">Cantidad rota</label>
-          <input type="number" min="1" v-model.number="rotura.cantidad" class="w-full border rounded-lg px-3 py-2" required />
-        </div>
-        <div class="md:col-span-2">
-          <label class="block text-sm font-medium">Observación</label>
-          <input v-model="rotura.observacion" class="w-full border rounded-lg px-3 py-2" />
-        </div>
-        <div class="md:col-span-5">
-          <button class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700">Registrar rotura</button>
+          <button type="button" class="px-3 py-2 rounded-lg border" @click="showEntrada=false">Cerrar sección</button>
         </div>
       </form>
     </section>
@@ -125,6 +138,40 @@
       </table>
     </div>
 
+    <!-- ======= MODAL CLAVE ======= -->
+    <div
+      v-if="showModalClave"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      @keydown.esc="closeClave"
+    >
+      <div class="bg-white w-full max-w-sm rounded-xl shadow p-6 space-y-4">
+        <h3 class="text-lg font-semibold">Acceso restringido</h3>
+        <p class="text-sm text-gray-600">Ingresa la contraseña para habilitar el registro de compras.</p>
+
+        <div class="space-y-2">
+          <label class="block text-sm font-medium">Contraseña</label>
+          <div class="flex">
+            <input
+              :type="verClave ? 'text' : 'password'"
+              v-model="clave"
+              class="flex-1 border rounded-l-lg px-3 py-2 focus:outline-none focus:ring"
+              placeholder="••••••••"
+              @keyup.enter="validarClave"
+              autofocus
+            />
+            <button type="button" class="border border-l-0 rounded-r-lg px-3 py-2" @click="verClave=!verClave">
+              {{ verClave ? 'Ocultar' : 'Ver' }}
+            </button>
+          </div>
+          <p v-if="claveError" class="text-sm text-red-600">{{ claveError }}</p>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button class="px-3 py-2 rounded-lg border" @click="closeClave">Cancelar</button>
+          <button class="px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700" @click="validarClave">Entrar</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -133,12 +180,40 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { searchFundas, adjustFundasAndLog } from '@/services/fundasService'
 
+/* ====== INVENTARIO Y RESÚMENES ====== */
 const items = ref([])
 const totalStock = computed(() => items.value.reduce((a,b)=>a+Number(b.stock||0), 0))
 const lowCount = computed(() => items.value.filter(x => x.stock <= x.minimo).length)
-
 async function load() { items.value = await searchFundas('') }
 onMounted(load)
+
+/* ====== ACCESO A SECCIÓN DE ENTRADA (COMPRA) ====== */
+const showEntrada = ref(false)           // por defecto oculto
+const showModalClave = ref(false)
+const clave = ref('')
+const verClave = ref(false)
+const claveError = ref('')
+const CLAVE_PERMITIDA = 'FUNDAS2025'
+
+function openClave() {
+  clave.value = ''
+  claveError.value = ''
+  verClave.value = false
+  showModalClave.value = true
+}
+function closeClave() {
+  showModalClave.value = false
+  clave.value = ''
+  claveError.value = ''
+}
+function validarClave() {
+  if (clave.value === CLAVE_PERMITIDA) {
+    showEntrada.value = true
+    closeClave()
+  } else {
+    claveError.value = 'Contraseña incorrecta'
+  }
+}
 
 /* ====== ENTRADA (COMPRA) ====== */
 const savingEntrada = ref(false)
@@ -184,7 +259,7 @@ async function saveEntrada() {
   }
 }
 
-/* ====== ROTURAS ====== */
+/* ====== ROTURAS (DEFAULT) ====== */
 const rotura = reactive({ funda_id:'', cantidad:null, observacion:'' })
 async function saveRotura() {
   if (!rotura.funda_id || !rotura.cantidad) return

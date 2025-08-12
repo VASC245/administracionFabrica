@@ -40,7 +40,7 @@ const routes = [
 
       { path: 'horas-maquina', name: 'operaciones-horas',
         component: () => import('@/pages/horasMaquina.vue'),
-        meta: { title: 'Horas por Máquina', roles: ['superadmin','supervisor'] } },
+        meta: { title: 'Horas por Máquina', roles: ['superadmin','supervisor','operador'] } },
 
       { path: 'mantenimiento', name: 'operaciones-mantenimiento',
         component: () => import('@/pages/Mantenimiento.vue'),
