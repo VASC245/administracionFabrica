@@ -27,7 +27,7 @@
       >
         Registrar ingreso (compra) 🔒
       </button>
-      <span class="text-sm text-gray-500">Requiere Contraseña</span>
+      <span class="text-sm text-gray-500">Pulsa si vas a ingresar compra de fundas</span>
     </div>
 
     <!-- ======= ROTURAS (DEFAULT) ======= -->
@@ -52,7 +52,7 @@
           <input v-model="rotura.observacion" class="w-full border rounded-lg px-3 py-2" />
         </div>
         <div class="md:col-span-5">
-          <button class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700">Registrar Fundas</button>
+          <button class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700">Registrar Fundas Rotas</button>
         </div>
       </form>
     </section>
@@ -225,24 +225,42 @@ const toggleCrear = ref(false)
 const nueva = reactive({ descripcion:'', medida:'', minimo:0 })
 
 async function crearFunda() {
-  if (!nueva.descripcion) return
+  if (!nueva.descripcion) return alert('Falta la descripción')
+
+  // Insert sin .single() (tolerante a RLS)
   const { data, error } = await supabase
     .from('fundas_plasticas')
-    .insert([{ descripcion: nueva.descripcion, medida: nueva.medida || null, minimo: Number(nueva.minimo||0) }])
-    .select()
-    .single()
-  if (error) { console.error(error); return alert('No se pudo crear la funda') }
-  entrada.funda_id = data.id
+    .insert([{
+      descripcion: nueva.descripcion,
+      medida: nueva.medida || null,
+      minimo: Number(nueva.minimo || 0)
+    }])
+    .select() // puede devolver array o 0 filas con RLS
+
+  if (error && error.code !== 'PGRST116') {
+    console.error(error); return alert('No se pudo crear la funda')
+  }
+
+  await load() // refrescar inventario
+
+  // Intentar seleccionar automáticamente la funda recién creada
+  const recien = items.value
+    .slice()
+    .reverse()
+    .find(f => f.descripcion === nueva.descripcion && (f.medida || '') === (nueva.medida || ''))
+  if (recien) entrada.funda_id = recien.id
+
   toggleCrear.value = false
   nueva.descripcion=''; nueva.medida=''; nueva.minimo=0
-  await load()
 }
 
 async function saveEntrada() {
-  if (!entrada.funda_id || !entrada.cantidad || !entrada.precio_unitario || !entrada.factura) return
+  if (!entrada.funda_id || !entrada.cantidad || !entrada.precio_unitario || !entrada.factura) {
+    return alert('Faltan datos')
+  }
   savingEntrada.value = true
   try {
-    await adjustFundasAndLog({
+    const { error } = await adjustFundasAndLog({
       funda_id: entrada.funda_id,
       delta: Number(entrada.cantidad),
       tipo: 'entrada',
@@ -250,6 +268,8 @@ async function saveEntrada() {
       factura: entrada.factura,
       proveedor: entrada.proveedor || null
     })
+    if (error && error.code !== 'PGRST116') throw error
+
     entrada.cantidad=null; entrada.precio_unitario=null; entrada.factura=''; entrada.proveedor=''
     await load()
   } catch (e) {
@@ -262,14 +282,16 @@ async function saveEntrada() {
 /* ====== ROTURAS (DEFAULT) ====== */
 const rotura = reactive({ funda_id:'', cantidad:null, observacion:'' })
 async function saveRotura() {
-  if (!rotura.funda_id || !rotura.cantidad) return
+  if (!rotura.funda_id || !rotura.cantidad) return alert('Faltan datos')
   try {
-    await adjustFundasAndLog({
+    const { error } = await adjustFundasAndLog({
       funda_id: rotura.funda_id,
       delta: -Math.abs(Number(rotura.cantidad)),
       tipo: 'rotura',
       observacion: rotura.observacion || null
     })
+    if (error && error.code !== 'PGRST116') throw error
+
     rotura.funda_id=''; rotura.cantidad=null; rotura.observacion=''
     await load()
   } catch (e) {

@@ -1,70 +1,100 @@
 // src/services/fundasService.js
 import { supabase } from '@/lib/supabase'
 
-export async function searchFundas(term = '', limit = 50) {
-  const t = String(term || '').trim()
-  let query = supabase.from('fundas_plasticas')
+/** Lista fundas; si q='', trae todas */
+export async function searchFundas(q = '') {
+  let query = supabase
+    .from('fundas_plasticas')
     .select('id, descripcion, medida, stock, minimo')
     .order('descripcion', { ascending: true })
-    .limit(limit)
-  if (t) {
-    query = supabase.from('fundas_plasticas')
-      .select('id, descripcion, medida, stock, minimo')
-      .or(`descripcion.ilike.%${t}%,medida.ilike.%${t}%`)
-      .order('descripcion', { ascending: true })
-      .limit(limit)
-  }
+
+  if (q) query = query.ilike('descripcion', `%${q}%`)
+
   const { data, error } = await query
-  if (error) throw error
+  if (error) {
+    console.error('[searchFundas]', error)
+    return []
+  }
   return data || []
 }
 
 /**
- * Ajusta stock de una funda y deja movimiento con metadatos (precio, factura, tipo, referencia).
- * delta: +entrada, -salida (producción o rotura)
- * tipo: 'entrada' | 'produccion' | 'rotura' | 'ajuste'
+ * Ajusta stock y escribe log.
+ * Devuelve { ok: boolean, error: SupabaseError|null }
+ * NO usa .single(); tolera 0 filas devueltas por RLS.
  */
 export async function adjustFundasAndLog({
   funda_id,
   delta,
-  tipo,
+  tipo,                 // 'entrada' | 'rotura' | 'uso'
   precio_unitario = null,
   factura = null,
   proveedor = null,
-  referencia = null,
   observacion = null
 }) {
-  // 1) Stock actual
-  const { data: cur, error: e1 } = await supabase
-    .from('fundas_plasticas')
-    .select('stock')
-    .eq('id', funda_id)
-    .single()
-  if (e1) throw e1
+  try {
+    // 0) Validaciones mínimas
+    if (!funda_id || !Number.isFinite(Number(delta))) {
+      return { ok: false, error: { message: 'Parámetros inválidos (funda_id/delta)' } }
+    }
 
-  const next = Math.max(0, Number(cur?.stock || 0) + Number(delta || 0))
+    // 1) Leer stock actual (tolerante a RLS)
+    let current = 0
+    {
+      const { data, error } = await supabase
+        .from('fundas_plasticas')
+        .select('stock')
+        .eq('id', funda_id)
+        .limit(1)
+      if (error && error.code !== 'PGRST116') {
+        console.error('[fundas_plasticas SELECT]', error)
+        return { ok: false, error }
+      }
+      if (Array.isArray(data) && data.length) current = Number(data[0].stock || 0)
+    }
 
-  // 2) Actualiza stock
-  const { error: e2 } = await supabase
-    .from('fundas_plasticas')
-    .update({ stock: next })
-    .eq('id', funda_id)
-  if (e2) throw e2
+    const newStock = current + Number(delta)
 
-  // 3) Movimiento
-  const { error: e3 } = await supabase
-    .from('fundas_movimientos')
-    .insert([{
+    // 2) Actualizar stock
+    {
+      const { error } = await supabase
+        .from('fundas_plasticas')
+        .update({ stock: newStock })
+        .eq('id', funda_id)
+        .select() // puede devolver array vacío por RLS; no pasa nada
+      if (error && error.code !== 'PGRST116') {
+        console.error('[fundas_plasticas UPDATE]', error)
+        return { ok: false, error }
+      }
+    }
+
+    // 3) Insertar en log (solo columnas presentes)
+    const payload = {
       funda_id,
-      cantidad: Number(delta),
+      fecha: new Date().toISOString(),
       tipo,
-      precio_unitario: precio_unitario ?? null,
-      factura: factura ?? null,
-      proveedor: proveedor ?? null,
-      referencia: referencia ?? null,
-      observacion: observacion ?? null
-    }])
-  if (e3) throw e3
+      cantidad: Math.abs(Number(delta)),
+      observacion: observacion || null
+    }
+    if (precio_unitario != null) payload.precio_unitario = Number(precio_unitario)
+    if (factura) payload.factura = String(factura)
+    if (proveedor) payload.proveedor = String(proveedor)
 
-  return next
+    {
+      const { error } = await supabase
+        .from('fundas_log')
+        .insert([payload])
+        .select() // array o 0 filas
+      if (error && error.code !== 'PGRST116') {
+        console.error('[fundas_log INSERT]', error)
+        // Si el log falla por columnas/políticas, avisamos pero conservamos el update de stock
+        return { ok: false, error }
+      }
+    }
+
+    return { ok: true, error: null }
+  } catch (e) {
+    console.error('[adjustFundasAndLog EXCEPTION]', e)
+    return { ok: false, error: { message: e?.message || 'Error inesperado' } }
+  }
 }
