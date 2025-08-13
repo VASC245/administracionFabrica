@@ -229,7 +229,7 @@ const menu = {
     { label: 'Asistencia', to: '/talento/asistencia', roles: ['superadmin','supervisor'] }
   ],
   comercial: [
-    { label: 'Reportes Comerciales', to: '/comercial/reportes', roles: ['superadmin','supervisor'] }
+    { label: 'Reportes Diario', to: '/comercial/reportes', roles: ['superadmin','supervisor'] }
   ],
   admin: [
     { label: 'Usuarios & Roles', to: '/admin/usuarios', roles: ['superadmin','supervisor'] }
