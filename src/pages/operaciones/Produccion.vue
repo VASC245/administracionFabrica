@@ -65,6 +65,18 @@
         />
       </div>
 
+      <!-- Hora (auto) -->
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-2">Hora (automática)</label>
+        <input
+          :value="horaAhora"
+          type="time"
+          class="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 text-gray-700"
+          disabled
+        />
+        <p class="text-xs text-gray-500 mt-1">Se guarda la hora exacta al momento de registrar.</p>
+      </div>
+
       <!-- Fundas -->
       <div>
         <label class="block text-sm font-semibold text-gray-700 mb-2">Cantidad de Fundas</label>
@@ -110,6 +122,7 @@
           <thead class="bg-gray-100 text-gray-700 uppercase text-xs">
             <tr>
               <th class="px-4 py-3 border text-left">Fecha</th>
+              <th class="px-4 py-3 border text-left">Hora</th>
               <th class="px-4 py-3 border text-left">Fundas</th>
             </tr>
           </thead>
@@ -120,10 +133,11 @@
               class="odd:bg-white even:bg-gray-50"
             >
               <td class="px-4 py-2 border whitespace-nowrap">{{ r.fecha }}</td>
+              <td class="px-4 py-2 border whitespace-nowrap">{{ r.hora ?? '—' }}</td>
               <td class="px-4 py-2 border">{{ r.fundas ?? 0 }}</td>
             </tr>
             <tr v-if="!producciones.length">
-              <td colspan="2" class="px-4 py-6 text-center text-gray-500">
+              <td colspan="3" class="px-4 py-6 text-center text-gray-500">
                 No hay registros en este rango de fechas.
               </td>
             </tr>
@@ -136,7 +150,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { searchFundas, adjustFundasAndLog } from '@/services/fundasService'
 
@@ -157,6 +171,16 @@ const form = reactive({
   fundas: null
 })
 
+/* ========= Hora actual (local, en vivo) ========= */
+const horaAhora = ref(getLocalTimeHHMM())
+let timer = null
+function getLocalTimeHHMM() {
+  const d = new Date()
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `${hh}:${mm}`
+}
+
 /* ========= Computados ========= */
 const totalFundas = computed(() =>
   fundas.value.reduce((a,b)=> a + Number(b.stock || 0), 0)
@@ -171,15 +195,19 @@ async function loadFundas() {
 async function loadProducciones(limit = 200) {
   const { data, error } = await supabase
     .from('produccion_fundas')
-    .select('id, fecha, fundas')
+    .select('id, fecha, hora, fundas')
     .order('fecha', { ascending: false })
+    .order('hora', { ascending: false })
     .limit(limit)
   if (!error) producciones.value = data || []
 }
 
 /* ========= Filtrar por fechas ========= */
 async function filtrarPorFechas() {
-  let q = supabase.from('produccion_fundas').select('id, fecha, fundas').order('fecha', { ascending: false })
+  let q = supabase.from('produccion_fundas')
+    .select('id, fecha, hora, fundas')
+    .order('fecha', { ascending: false })
+    .order('hora', { ascending: false })
   if (fechaInicio.value) q = q.gte('fecha', fechaInicio.value)
   if (fechaFin.value)   q = q.lte('fecha', fechaFin.value)
   const { data, error } = await q
@@ -202,8 +230,8 @@ async function save() {
 
   saving.value = true
   try {
-    // 1) Insertar producción
-    const payload = { fecha: form.fecha, fundas: cantidad }
+    // 1) Insertar producción con hora automática local
+    const payload = { fecha: form.fecha, hora: getLocalTimeHHMM() + ':00', fundas: cantidad }
     const { data: row, error } = await supabase
       .from('produccion_fundas')
       .insert([payload])
@@ -238,8 +266,13 @@ async function save() {
   }
 }
 
-/* ========= Init ========= */
+/* ========= Init / cleanup ========= */
 onMounted(async () => {
   await Promise.all([loadFundas(), loadProducciones()])
+  // actualizar reloj visible cada 15s
+  timer = setInterval(() => (horaAhora.value = getLocalTimeHHMM()), 15000)
+})
+onBeforeUnmount(() => {
+  if (timer) clearInterval(timer)
 })
 </script>

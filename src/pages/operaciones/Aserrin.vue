@@ -232,7 +232,7 @@ import { ref, computed, onMounted } from 'vue'
 import { supabase } from '@/lib/supabase'
 
 /* ===== Constantes ===== */
-const PESO_PALA = 170
+const PESO_PALA = 120
 
 /* ===== Proveedores ===== */
 const proveedores = ref([])

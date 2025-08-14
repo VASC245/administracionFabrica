@@ -84,7 +84,7 @@ const routes = [
     children: [
       { path: 'asistencia', name: 'talento-asistencia',
         component: () => import('@/pages/th/Asistencia.vue'),
-        meta: { title: 'Asistencia', roles: ['superadmin','supervisor'] } }
+        meta: { title: 'Asistencia', roles: ['superadmin','supervisor','operador'] } }
     ]
   },
 

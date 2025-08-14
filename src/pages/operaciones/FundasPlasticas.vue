@@ -227,23 +227,21 @@ const nueva = reactive({ descripcion:'', medida:'', minimo:0 })
 async function crearFunda() {
   if (!nueva.descripcion) return alert('Falta la descripción')
 
-  // Insert sin .single() (tolerante a RLS)
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from('fundas_plasticas')
     .insert([{
       descripcion: nueva.descripcion,
       medida: nueva.medida || null,
       minimo: Number(nueva.minimo || 0)
     }])
-    .select() // puede devolver array o 0 filas con RLS
+    .select()
 
   if (error && error.code !== 'PGRST116') {
     console.error(error); return alert('No se pudo crear la funda')
   }
 
-  await load() // refrescar inventario
+  await load()
 
-  // Intentar seleccionar automáticamente la funda recién creada
   const recien = items.value
     .slice()
     .reverse()
@@ -281,21 +279,80 @@ async function saveEntrada() {
 
 /* ====== ROTURAS (DEFAULT) ====== */
 const rotura = reactive({ funda_id:'', cantidad:null, observacion:'' })
+
+/**
+ * Usa la RPC transaccional. Si aún no existe en la BD,
+ * hace un fallback en dos pasos (leer/actualizar stock + insertar rotura).
+ */
+async function registrarRotura({ funda_id, cantidad, observacion }) {
+  const cant = Math.abs(Number(cantidad))
+
+  // 1) Intentar RPC
+  try {
+    const { error: rpcErr } = await supabase.rpc('registrar_fundas_rotas', {
+      p_funda_id: funda_id,
+      p_cantidad: cant,
+      p_observacion: observacion || null
+    })
+    if (!rpcErr) return { ok: true }
+    // Si la función existe y falló por otra causa, propaga
+    if (rpcErr && rpcErr.message && !/Function .* not found/i.test(rpcErr.message)) {
+      throw rpcErr
+    }
+  } catch (e) {
+    if (!/not found/i.test(String(e?.message || e))) throw e
+  }
+
+  // 2) Fallback manual (no atómico)
+  // 2.1 leer stock actual
+  const { data: fundaRow, error: getErr } = await supabase
+    .from('fundas_plasticas')
+    .select('id, stock')
+    .eq('id', funda_id)
+    .maybeSingle()
+
+  if (getErr || !fundaRow) {
+    throw getErr || new Error('Funda no encontrada')
+  }
+
+  const nuevoStock = Math.max(0, Number(fundaRow.stock || 0) - cant)
+
+  // 2.2 actualizar stock
+  const { error: updErr } = await supabase
+    .from('fundas_plasticas')
+    .update({ stock: nuevoStock })
+    .eq('id', funda_id)
+
+  if (updErr) throw updErr
+
+  // 2.3 insertar rotura
+  const { error: insErr } = await supabase
+    .from('fundas_rotas')
+    .insert([{
+      funda_id,
+      cantidad: cant,
+      observacion: observacion || null
+    }])
+
+  if (insErr) throw insErr
+
+  return { ok: true }
+}
+
 async function saveRotura() {
   if (!rotura.funda_id || !rotura.cantidad) return alert('Faltan datos')
   try {
-    const { error } = await adjustFundasAndLog({
+    await registrarRotura({
       funda_id: rotura.funda_id,
-      delta: -Math.abs(Number(rotura.cantidad)),
-      tipo: 'rotura',
-      observacion: rotura.observacion || null
+      cantidad: rotura.cantidad,
+      observacion: rotura.observacion
     })
-    if (error && error.code !== 'PGRST116') throw error
-
     rotura.funda_id=''; rotura.cantidad=null; rotura.observacion=''
     await load()
+    alert('Rotura registrada y stock actualizado')
   } catch (e) {
-    console.error(e); alert('No se pudo registrar la rotura')
+    console.error(e)
+    alert('No se pudo registrar la rotura')
   }
 }
 </script>

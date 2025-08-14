@@ -226,7 +226,7 @@ const menu = {
     { label: 'Fundas Plásticas', to: '/operaciones/fundas/registro', roles: ['superadmin','supervisor','operador'] }
   ],
   talento: [
-    { label: 'Asistencia', to: '/talento/asistencia', roles: ['superadmin','supervisor'] }
+    { label: 'Asistencia', to: '/talento/asistencia', roles: ['superadmin','supervisor','operador'] }
   ],
   comercial: [
     { label: 'Reportes Diario', to: '/comercial/reportes', roles: ['superadmin','supervisor'] }
