@@ -72,7 +72,17 @@ const routes = [
 
       { path: 'fundas/registro', name: 'operaciones-fundas-registro',
         component: () => import('@/pages/operaciones/FundasPlasticas.vue'),
-        meta: { title: 'Fundas Plásticas', roles: ['superadmin','supervisor','operador'] } }
+        meta: { title: 'Fundas Plásticas', roles: ['superadmin','supervisor','operador'] } },
+
+      // === Fotogrametría (ruta nueva oficial) ===
+      { path: 'fotogrametria', name: 'operaciones-fotogrametria',
+        component: () => import('@/views/Fotogrametria.vue'),
+        meta: { title: 'Fotogrametría', roles: ['superadmin','supervisor'] } },
+
+      // === Compatibilidad: tu ruta previa de medición ===
+      { path: 'medicion/aserrin', name: 'operaciones-medicion-aserrin',
+        component: () => import('@/views/Fotogrametria.vue'),
+        meta: { title: 'Medición de Aserrín', roles: ['superadmin','supervisor'] } }
     ]
   },
 
@@ -164,6 +174,12 @@ router.beforeEach(async (to, from, next) => {
   }
 
   next()
+})
+
+// Título de la pestaña
+router.afterEach((to) => {
+  const base = 'Fuego Verde'
+  document.title = to.meta?.title ? `${base} · ${to.meta.title}` : base
 })
 
 export default router

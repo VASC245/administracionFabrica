@@ -223,7 +223,8 @@ const menu = {
     { label: 'Horno (secado)', to: '/operaciones/horno', roles: ['superadmin','supervisor','operador'] },
     { label: 'Leña', to: '/operaciones/lena', roles: ['superadmin','supervisor'] },
     { label: 'Entrega de Producto', to: '/operaciones/despacho', roles: ['superadmin','supervisor'] },
-    { label: 'Fundas Plásticas', to: '/operaciones/fundas/registro', roles: ['superadmin','supervisor','operador'] }
+    { label: 'Fundas Plásticas', to: '/operaciones/fundas/registro', roles: ['superadmin','supervisor','operador'] },
+    { label: 'Fotogrametría', to: '/operaciones/fotogrametria', roles: ['superadmin'] },
   ],
   talento: [
     { label: 'Asistencia', to: '/talento/asistencia', roles: ['superadmin','supervisor','operador'] }
