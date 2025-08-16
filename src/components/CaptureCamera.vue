@@ -5,6 +5,7 @@
       <div class="text-sm text-gray-500">Lote: {{ loteId }}</div>
     </div>
 
+    <!-- Panel de métricas -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
       <div class="p-2 rounded-lg border">
         <div class="text-gray-500">Fotos válidas</div>
@@ -30,6 +31,7 @@
       </div>
     </div>
 
+    <!-- Vista cámara + overlay -->
     <div class="relative w-full rounded-xl overflow-hidden border aspect-[3/4] bg-black">
       <video ref="videoEl" playsinline autoplay muted class="absolute inset-0 w-full h-full object-cover"></video>
       <canvas ref="overlayEl" class="absolute inset-0 w-full h-full pointer-events-none"></canvas>
@@ -55,6 +57,11 @@
       <button @click="toggleTorch" v-if="torchSupported" class="px-4 py-3 rounded-lg border">
         {{ torchOn ? 'Apagar luz' : 'Encender luz' }}
       </button>
+    </div>
+
+    <!-- Info de sensores -->
+    <div v-if="sensorInfo" class="text-xs text-gray-500">
+      {{ sensorInfo }}
     </div>
 
     <details>
@@ -94,7 +101,7 @@ const taking = ref(false)
 
 const sharpness = ref(0)
 const exposure = ref(0.5)
-const pitchDeg = ref(0)
+const pitchDeg = ref(0)            // ángulo en grados (0-90)
 const sharpnessMin = ref(120)
 const pitchMin = ref(20)
 const pitchMax = ref(50)
@@ -102,6 +109,7 @@ const mensaje = ref('Ajusta ángulo / nitidez / exposición')
 
 const torchSupported = ref(false)
 const torchOn = ref(false)
+const sensorInfo = ref('')          // texto de diagnóstico
 
 const sharpnessOk = computed(() => sharpness.value >= sharpnessMin.value)
 const angleOk = computed(() => pitchDeg.value >= pitchMin.value && pitchDeg.value <= pitchMax.value)
@@ -109,18 +117,31 @@ const exposureOk = computed(() => exposure.value > 0.08 && exposure.value < 0.92
 const allOk = computed(() => sharpnessOk.value && angleOk.value && exposureOk.value)
 
 let overlayCtx, sampleCanvas, sampleCtx, rafId
+let orientationSensor = null
+let devOrientHandler = null
 
-onMounted(() => {
-  initCamera()
-  window.addEventListener('deviceorientation', deviceOrientationHandler, true)
+onMounted(async () => {
+  await initCamera()
+  await initOrientation() // ← inicializa sensores y permisos
 })
 
 onBeforeUnmount(() => {
   cancelAnimationFrame(rafId)
-  window.removeEventListener('deviceorientation', deviceOrientationHandler, true)
+  // Limpia video
   if (streamRef.value) streamRef.value.getTracks().forEach(t => t.stop())
+
+  // Limpia sensores
+  if (orientationSensor) {
+    try { orientationSensor.stop() } catch {}
+    orientationSensor = null
+  }
+  if (devOrientHandler) {
+    window.removeEventListener('deviceorientation', devOrientHandler, true)
+    devOrientHandler = null
+  }
 })
 
+/* ----------------- Cámara ----------------- */
 async function initCamera() {
   try {
     const constraints = {
@@ -152,11 +173,6 @@ async function initCamera() {
   } catch (e) {
     alert('No se pudo abrir la cámara: ' + (e.message || e))
   }
-}
-
-function deviceOrientationHandler(evt) {
-  const beta = evt.beta // -180..180
-  pitchDeg.value = Math.abs(beta ?? 0)
 }
 
 function tick() {
@@ -198,6 +214,7 @@ function drawOverlay() {
   overlayCtx.stroke()
 }
 
+/* ------------ Análisis de imagen ------------ */
 function meanLuma(img) {
   const data = img.data
   let sum = 0
@@ -233,6 +250,7 @@ function laplacianSharpness(img) {
   return Math.max(0, variance / 100)
 }
 
+/* ----------------- Torch ----------------- */
 async function toggleTorch() {
   const track = streamRef.value?.getVideoTracks?.()[0]
   if (!track) return
@@ -244,6 +262,7 @@ async function toggleTorch() {
   }
 }
 
+/* ----------------- Foto + Supabase ----------------- */
 async function takePhoto() {
   if (!allOk.value || taking.value) return
   taking.value = true
@@ -280,5 +299,90 @@ async function takePhoto() {
   } finally {
     taking.value = false
   }
+}
+
+/* --------------- Sensores de orientación --------------- */
+/**
+ * Inicializa sensores pidiendo permisos cuando hace falta (iOS).
+ * Usa AbsoluteOrientationSensor si existe, si no, DeviceOrientationEvent (beta).
+ */
+async function initOrientation() {
+  try {
+    // iOS/Safari: requiere permiso explícito
+    const needsPermission = typeof DeviceOrientationEvent !== 'undefined'
+      && typeof DeviceOrientationEvent.requestPermission === 'function'
+
+    if (needsPermission) {
+      const res = await DeviceOrientationEvent.requestPermission()
+      if (res !== 'granted') {
+        sensorInfo.value = 'Permiso de sensores denegado. Sin ángulo.'
+        return
+      }
+    }
+
+    // 1) Preferimos AbsoluteOrientationSensor si está disponible
+    if ('AbsoluteOrientationSensor' in window) {
+      const { AbsoluteOrientationSensor } = window
+      orientationSensor = new AbsoluteOrientationSensor({ frequency: 60 })
+      orientationSensor.addEventListener('reading', () => {
+        const q = orientationSensor.quaternion // [x,y,z,w]
+        if (q && q.length === 4) {
+          const { pitch } = quatToEuler(q[0], q[1], q[2], q[3]) // radianes
+          const deg = Math.abs(pitch * 180 / Math.PI)
+          pitchDeg.value = clamp(deg, 0, 90) // normalizamos 0..90
+        }
+      })
+      orientationSensor.addEventListener('error', (ev) => {
+        console.warn('AbsoluteOrientationSensor error:', ev.error?.name || ev)
+        sensorInfo.value = 'Sensor absoluto no disponible, usando deviceorientation.'
+        initDeviceOrientationFallback()
+      })
+      orientationSensor.start()
+      sensorInfo.value = 'Ángulo: AbsoluteOrientationSensor activo'
+      return
+    }
+
+    // 2) Fallback a deviceorientation
+    sensorInfo.value = 'Ángulo: deviceorientation (beta)'
+    initDeviceOrientationFallback()
+  } catch (e) {
+    console.warn('initOrientation error:', e)
+    sensorInfo.value = 'No se pudo iniciar sensores. Verifica HTTPS/permiso.'
+  }
+}
+
+function initDeviceOrientationFallback() {
+  devOrientHandler = (evt) => {
+    // beta: inclinación adelante/atrás; en muchos dispositivos es nuestro pitch
+    const beta = (evt && typeof evt.beta === 'number') ? evt.beta : 0
+    // normaliza a 0..90 (en algunos teléfonos beta puede ir -180..180)
+    const deg = Math.min(90, Math.abs(beta))
+    pitchDeg.value = deg
+  }
+  window.addEventListener('deviceorientation', devOrientHandler, true)
+}
+
+/* -------- Utilidades orientación (cuaternión → Euler) -------- */
+/**
+ * Convierte cuaternión a Euler ZYX (yaw, pitch, roll).
+ * Devuelve { yaw, pitch, roll } en radianes.
+ */
+function quatToEuler(x, y, z, w) {
+  // Matriz de rotación
+  const r11 = 1 - 2*(y*y + z*z)
+  const r21 = 2*(x*y + w*z)
+  const r31 = 2*(x*z - w*y)
+  const r32 = 2*(y*z + w*x)
+  const r33 = 1 - 2*(x*x + y*y)
+
+  // ZYX: yaw (Z), pitch (Y), roll (X)
+  const yaw   = Math.atan2(r21, r11)
+  const pitch = Math.asin(clamp(r31, -1, 1))       // clamp para seguridad numérica
+  const roll  = Math.atan2(r32, r33)
+  return { yaw, pitch, roll }
+}
+
+function clamp(v, a, b) {
+  return Math.max(a, Math.min(b, v))
 }
 </script>
